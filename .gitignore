@@ -1,0 +1,38 @@
+# Build output
+target/
+*.class
+*.jar
+*.war
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.history/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+kubeconfig
+*.kubeconfig
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# Logs and OS
+*.log
+.DS_Store
+Thumbs.db
