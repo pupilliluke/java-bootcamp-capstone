@@ -1,36 +1,58 @@
 package com.capstone.crm.service;
 
-import com.northstar.crm.dto.CustomerRequest;
-import com.northstar.crm.model.Customer;
+import com.capstone.crm.api.dto.CustomerMapper;
+import com.capstone.crm.api.dto.CustomerRequestDTO;
+import com.capstone.crm.api.dto.CustomerResponseDTO;
+import com.capstone.crm.entity.Customer;
+import com.capstone.crm.entity.CustomerStatus;
+import com.capstone.crm.exception.CustomerNotFoundException;
+import com.capstone.crm.exception.DuplicateCustomerException;
+import com.capstone.crm.repository.CustomerRepository;
+import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class CustomerService {
-    private final Map<String, Customer> store = new ConcurrentHashMap<>();
 
-    public CustomerService() {
-        store.put("CUS-1001", Customer.amina());    //test customers
-        store.put("CUS-1002", Customer.ravi());
+    private final CustomerRepository customerRepository;
+
+    public CustomerService(CustomerRepository customerRepository) {
+        this.customerRepository = customerRepository;
     }
 
-    public Customer create(CustomerRequest request, String correlationId) {
-        if (store.containsKey(request.getId())) {
-            throw new IllegalStateException("Duplicate customer: " + request.getId());
-        }
-        Customer c = new Customer(request.getId(), request.getName(), request.getEmail(), request.getStatus());
-        store.put(c.getId(), c);
-        return c;
+    @PostConstruct
+    void seedDemoCustomers() {
+        customerRepository.save(new Customer(
+                "CUS-1001", "Amina Khan", "amina.khan@example.test", "555-0101",
+                CustomerStatus.ACTIVE, LocalDateTime.now()));
+        customerRepository.save(new Customer(
+                "CUS-1002", "Ravi Singh", "ravi.singh@example.test", "555-0102",
+                CustomerStatus.ACTIVE, LocalDateTime.now()));
     }
 
-    public Customer get(String id) {
-        if(id == null){
-            throw new IllegalArgumentException("No ID");
+    public CustomerResponseDTO create(CustomerRequestDTO request) {
+        if (customerRepository.existsById(request.customerId())) {
+            throw new DuplicateCustomerException("Duplicate customer: " + request.customerId());
         }
-        Customer c = store.get(id);
-        if (c == null) throw new IllegalArgumentException("Customer not found: " + id);
-        return c;
+        Customer customer = CustomerMapper.toEntity(request);
+        customer.setCreatedAt(LocalDateTime.now());
+        Customer saved = customerRepository.save(customer);
+        return CustomerMapper.toResponse(saved);
+    }
+
+    public CustomerResponseDTO get(String customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
+        return CustomerMapper.toResponse(customer);
+    }
+
+    public List<CustomerResponseDTO> list() {
+        return customerRepository.findAll().stream()
+                .map(CustomerMapper::toResponse)
+                .collect(Collectors.toList());
     }
 }
