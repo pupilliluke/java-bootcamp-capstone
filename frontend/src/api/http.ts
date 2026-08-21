@@ -30,7 +30,7 @@ export async function http<T>(
   }
 
   if (!res.ok) {
-    throw new ApiError(`Request failed (HTTP ${res.status})`, 'http', res.status)
+    throw new ApiError(await errorMessage(res), 'http', res.status)
   }
 
   if (res.status === 204) return null as T
@@ -39,4 +39,17 @@ export async function http<T>(
   } catch {
     throw new ApiError('Could not parse response', 'parse')
   }
+}
+
+// GlobalExceptionHandler returns {timestamp, status, error, message} on every
+// failure path, including the assembled "Validation failed: ..." string. Without
+// this the user only ever sees the status line and the field errors are lost.
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json()
+    if (body && typeof body.message === 'string') return body.message
+  } catch {
+    // no JSON body — fall through to the status line
+  }
+  return `Request failed (HTTP ${res.status})`
 }
