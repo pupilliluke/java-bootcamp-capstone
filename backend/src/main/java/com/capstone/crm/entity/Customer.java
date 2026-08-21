@@ -23,6 +23,16 @@ public class Customer {
         this.createdAt = createdAt;
     }
 
+    public static Customer amina() {        //test customers
+        return new Customer("CUS-1001", "Amina Khan", "amina.khan@example.com", null,
+                CustomerStatus.ACTIVE, LocalDateTime.now());
+    }
+
+    public static Customer ravi() {
+        return new Customer("CUS-1002", "Ravi Singh", "ravi.singh@example.com", null,
+                CustomerStatus.PROSPECT, LocalDateTime.now());
+    }
+
     public String getCustomerId() { return customerId; }
     public void setCustomerId(String customerId) { this.customerId = customerId; }
     public String getFullName() { return fullName; }
