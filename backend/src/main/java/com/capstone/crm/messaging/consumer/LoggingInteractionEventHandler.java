@@ -14,8 +14,9 @@ public class LoggingInteractionEventHandler implements InteractionEventHandler {
     @Override
     public void handle(InteractionEvent event) {
         log.info(
-                "Processed interaction event: eventId={}, interactionId={}, customerId={}, channel={}",
+                "Processed interaction event: eventId={}, correlationId={}, interactionId={}, customerId={}, channel={}",
                 event.eventId(),
+                event.correlationId(),
                 event.interactionId(),
                 event.customerId(),
                 event.channel()

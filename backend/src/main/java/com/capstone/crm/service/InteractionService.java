@@ -22,11 +22,12 @@ public class InteractionService {
         this.producer = producer;
     }
 
-    public InteractionEvent createAndPublish(CreateInteractionRequest request) {
+    public InteractionEvent createAndPublish(CreateInteractionRequest request, String correlationId) {
         // Ensures the interaction belongs to a known customer.
         customerService.get(request.customerId());
         InteractionEvent event = new InteractionEvent(
                 UUID.randomUUID(), // Kafka event ID
+                correlationId,
                 "interaction.created", // event type
                 1, // contract version
                 Instant.now(), // creation time

@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record InteractionEvent(
         UUID eventId,
+        String correlationId,
         String eventType,
         int version,
         Instant occurredAt,
