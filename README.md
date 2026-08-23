@@ -126,22 +126,29 @@ mvn spring-boot:run
 
 ### JWT secret
 
-`JWT_SECRET` is required and has no default. A fallback committed to the repository would be a weak secret that ships, so the application refuses to start without it:
+Secrets live in a gitignored `.env` at the repository root, never in `application.yml`. Copy the template once and fill it in:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`application.yml` imports it with `optional:file:./.env[.properties],optional:file:../.env[.properties]`, so `mvn spring-boot:run` works with nothing exported, whether you launch from the repository root or from `backend/`. Both paths are listed because the import resolves against the JVM working directory, and a path that misses is skipped silently.
+
+`JWT_SECRET` is required and has no default. A committed fallback would be a weak secret that ships, so a missed import crashes the app at startup rather than quietly running on one:
 
 ```text
 Could not resolve placeholder 'JWT_SECRET' in value "${JWT_SECRET}"
 ```
 
-Set it before running the backend:
+HS256 signs with a 256-bit key, so the value must be at least 32 characters. Any string works, and it does **not** have to match what teammates use — it only has to stay stable for you, or previously issued tokens stop verifying.
 
-```powershell
-$env:JWT_SECRET = "local-dev-secret-at-least-32-bytes-long!"
-mvn spring-boot:run
-```
+Tests need none of this: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with nothing set.
 
-HS256 signs with a 256-bit key, so the value must be at least 32 characters. A shorter one also fails at startup rather than producing weakly signed tokens.
+### Deploying
 
-Tests do not need it: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with the variable unset.
+There is no `.env` in a deployed environment. Both imports skip, and the same key names arrive as real environment variables instead — Azure App Service Application Settings, Container Apps secrets, or a Kubernetes Secret. The image is identical on a laptop and in the cloud; only the source of the values changes.
+
+`.env.example` is the committed list of which keys exist. Deploying means copying those keys into the host's settings, never uploading the file.
 
 ### Demo accounts
 

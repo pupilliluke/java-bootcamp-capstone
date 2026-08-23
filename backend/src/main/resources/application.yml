@@ -2,6 +2,23 @@ spring:
   application:
     name: crm
 
+  # Secrets are read as a config tree: one file per property, filename = property
+  # name. This is the same mechanism a Kubernetes Secret volume mount uses, so
+  # deploying only changes the path, not the code. Config and secrets stay
+  # separate concerns rather than sharing a file.
+  #
+  # Secrets come from a gitignored .env at the repository root. The [.properties]
+  # hint tells Spring to parse it as a properties file. Both candidate paths are
+  # listed because the import resolves against the JVM working directory, and a
+  # path that misses is skipped silently thanks to optional: — launching from
+  # the repo root uses the first, launching from backend/ uses the second.
+  #
+  # In a deployed environment there is no .env, both imports skip, and the same
+  # variable names arrive as real environment variables instead. The image does
+  # not change between a laptop and Azure.
+  config:
+    import: optional:file:./.env[.properties],optional:file:../.env[.properties]
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -34,9 +51,11 @@ logging:
 crm:
   security:
     jwt:
-      # No default on purpose: a committed fallback is a weak secret that ships.
-      # Must be at least 32 characters — HS256 needs a 256-bit key and startup
-      # fails loudly on anything shorter.
+      # No default on purpose: a committed fallback is a weak secret that ships,
+      # so a missed import crashes at startup rather than quietly running on one.
+      # The value comes from .env locally and from an environment variable of the
+      # same name once deployed. Must be at least 32 characters: HS256 needs a
+      # 256-bit key.
       secret: ${JWT_SECRET}
       issuer: capstone-crm
       expiration-minutes: 60
