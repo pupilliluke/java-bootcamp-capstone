@@ -115,6 +115,8 @@ mvn clean verify
 
 ## Configuration
 
+### Kafka broker
+
 The backend uses `localhost:9092` by default. Override the broker address with the `KAFKA_BOOTSTRAP_SERVERS` environment variable when needed.
 
 ```powershell
@@ -122,12 +124,42 @@ $env:KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 mvn spring-boot:run
 ```
 
+### JWT secret
+
+`JWT_SECRET` is required and has no default. A fallback committed to the repository would be a weak secret that ships, so the application refuses to start without it:
+
+```text
+Could not resolve placeholder 'JWT_SECRET' in value "${JWT_SECRET}"
+```
+
+Set it before running the backend:
+
+```powershell
+$env:JWT_SECRET = "local-dev-secret-at-least-32-bytes-long!"
+mvn spring-boot:run
+```
+
+HS256 signs with a 256-bit key, so the value must be at least 32 characters. A shorter one also fails at startup rather than producing weakly signed tokens.
+
+Tests do not need it: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with the variable unset.
+
+### Demo accounts
+
+Authentication uses two in-memory accounts. `POST /api/auth/login` returns a bearer token to send as `Authorization: Bearer <token>`.
+
+| Username | Password | Role |
+| -------- | -------- | ---- |
+| `agent1` | `agent1` | AGENT |
+| `admin1` | `admin1` | ADMIN |
+
+`/api/customers` and `/api/interactions` require AGENT or ADMIN. `/api/admin` requires ADMIN. `/api/auth/login` and the Actuator health probes are public.
+
 ## Project structure
 
 ```text
 java-bootcamp-capstone/
 ├── backend/                 Spring Boot application and tests
-├── frontend/                Reserved for frontend work
+├── frontend/                React + TypeScript application (Vite)
 ├── docs/                    Reserved for documentation
 ├── defense/                 Reserved for defense material
 ├── reports/                 Reserved for reports
