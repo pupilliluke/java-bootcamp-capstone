@@ -134,6 +134,16 @@ h1, h2, h3, h4 {
   padding: 1.6rem 2rem 4rem;
 }
 
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
 .page-header {
   display: flex;
   align-items: center;

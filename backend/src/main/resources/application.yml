@@ -27,3 +27,13 @@ spring:
 
 server:
   port: 8080
+
+crm:
+  security:
+    jwt:
+      # No default on purpose: a committed fallback is a weak secret that ships.
+      # Must be at least 32 characters — HS256 needs a 256-bit key and startup
+      # fails loudly on anything shorter.
+      secret: ${JWT_SECRET}
+      issuer: capstone-crm
+      expiration-minutes: 60
