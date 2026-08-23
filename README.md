@@ -144,6 +144,26 @@ HS256 signs with a 256-bit key, so the value must be at least 32 characters. Any
 
 Tests need none of this: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with nothing set.
 
+### Database
+
+Defaults point at the local Postgres in `docker-compose.yml`, so nothing needs setting for local work:
+
+```powershell
+docker compose up -d postgres
+```
+
+Flyway creates the schema on first startup. To target a hosted database such as Azure instead, set all three keys in `.env`:
+
+```properties
+DB_URL=jdbc:postgresql://<server>.postgres.database.azure.com:5432/crm?sslmode=require
+DB_USER=<admin-user>
+DB_PASSWORD=<password>
+```
+
+`sslmode=require` is not optional on Azure — the connection is refused without it. The Azure server also needs a firewall rule for your client IP under Networking, or the connection times out with no useful error.
+
+Comment those three keys out to fall back to the local container. Tests never touch either one: they run against in-memory H2.
+
 ### Deploying
 
 There is no `.env` in a deployed environment. Both imports skip, and the same key names arrive as real environment variables instead — Azure App Service Application Settings, Container Apps secrets, or a Kubernetes Secret. The image is identical on a laptop and in the cloud; only the source of the values changes.

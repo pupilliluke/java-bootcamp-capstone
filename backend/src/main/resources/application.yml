@@ -2,11 +2,6 @@ spring:
   application:
     name: crm
 
-  # Secrets are read as a config tree: one file per property, filename = property
-  # name. This is the same mechanism a Kubernetes Secret volume mount uses, so
-  # deploying only changes the path, not the code. Config and secrets stay
-  # separate concerns rather than sharing a file.
-  #
   # Secrets come from a gitignored .env at the repository root. The [.properties]
   # hint tells Spring to parse it as a properties file. Both candidate paths are
   # listed because the import resolves against the JVM working directory, and a
@@ -18,6 +13,28 @@ spring:
   # not change between a laptop and Azure.
   config:
     import: optional:file:./.env[.properties],optional:file:../.env[.properties]
+
+  # Defaults point at the local docker-compose Postgres. Set DB_URL, DB_USER and
+  # DB_PASSWORD in .env to target Azure instead — the Azure URL needs
+  # ?sslmode=require. Unlike the JWT secret these carry defaults: they guard a
+  # throwaway localhost container whose credentials are already visible in
+  # docker-compose.yml, whereas a leaked signing key would let anyone mint a
+  # valid ADMIN token.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/crm}
+    username: ${DB_USER:crm}
+    password: ${DB_PASSWORD:crm}
+
+  jpa:
+    hibernate:
+      # validate, never update: the schema is Flyway's to own. An entity that
+      # drifts from the migration fails at startup instead of silently altering
+      # a table in Azure.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}

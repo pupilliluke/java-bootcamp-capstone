@@ -3,3 +3,24 @@ services:
     image: apache/kafka:4.3.1
     ports:
       - "9092:9092"
+
+  postgres:
+    image: postgres:17
+    # No container_name on purpose: compose scopes it to the project, so it
+    # cannot collide with the crm-postgres-* containers the labs leave behind.
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+    volumes:
+      - crm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  crm_pgdata:
