@@ -6,52 +6,37 @@ built is listed under [Gaps](#gaps) rather than drawn as if it exists.
 ## Container view
 
 ```mermaid
+%%{init: {"flowchart": {"curve": "linear", "nodeSpacing": 45, "rankSpacing": 55}}}%%
 flowchart TB
-  Agent(["Service agent<br/>(browser)"])
+  Agent["Service agent"]
 
-  subgraph Frontend["Frontend · React 18 + TypeScript · Vite :5173"]
-    Guard["ProtectedRoute<br/>login gate"]
-    Workspace["CustomerWorkspace<br/>search → profile → interaction"]
-    Store["tokenStore<br/>JWT held in memory"]
-    Http["http.ts<br/>attaches bearer, clears session on 401"]
+  subgraph FE["Frontend — React 18 + TypeScript, Vite :5173"]
+    direction TB
+    Guard["ProtectedRoute gate"]
+    Work["CustomerWorkspace"]
+    Client["http.ts and tokenStore"]
   end
 
-  subgraph Backend["Backend · Spring Boot 3.3.5 · Java 21 · :8080"]
-    Filter["JwtAuthenticationFilter<br/>+ SecurityConfig RBAC"]
-    AuthC["AuthController<br/>/api/auth/login"]
-    CustC["CustomerController<br/>/api/customers"]
-    IntC["InteractionController<br/>/api/interactions"]
-    Jwt["JwtService<br/>HS256, iss/sub/role/iat/exp"]
-    Users["CrmUserDetailsService<br/>+ AppUserRepository"]
-    CustSvc["CustomerService<br/>in-memory store"]
-    IntSvc["InteractionService"]
-    Prod["InteractionEventProducer"]
-    Cons["InteractionEventConsumer"]
+  subgraph BE["Backend — Spring Boot 3.3.5, Java 21, :8080"]
+    direction TB
+    Filter["JwtAuthenticationFilter and SecurityConfig"]
+    Ctrl["AuthController, CustomerController, InteractionController"]
+    Svc["CustomerService, InteractionService, JwtService"]
+    Repo["AppUserRepository via JPA, CustomerRepository in memory"]
   end
 
-  DB[("PostgreSQL 17<br/>app_user · Flyway V1")]
-  Topic[["Kafka 4.3.1<br/>crm.interaction.v1"]]
+  DB[("PostgreSQL — app_user")]
+  Topic[["Kafka — crm.interaction.v1"]]
 
   Agent --> Guard
-  Guard --> Workspace
-  Workspace --> Http
-  Http <--> Store
-  Http -->|"HTTPS / REST<br/>Authorization: Bearer"| Filter
-
-  Filter --> AuthC
-  Filter --> CustC
-  Filter --> IntC
-  Filter -.->|"verify signature,<br/>issuer, exp"| Jwt
-
-  AuthC --> Users
-  AuthC -->|"issue token"| Jwt
-  Users -->|"JPA"| DB
-
-  CustC --> CustSvc
-  IntC --> IntSvc
-  IntSvc --> Prod
-  Prod -->|publish| Topic
-  Topic -->|consume| Cons
+  Guard --> Work
+  Work --> Client
+  Client -- "REST with bearer token" --> Filter
+  Filter --> Ctrl
+  Ctrl --> Svc
+  Svc --> Repo
+  Repo --> DB
+  Svc --> Topic
 ```
 
 ## Request paths
@@ -69,20 +54,21 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
+  autonumber
   participant UI as React UI
   participant API as AuthController
   participant DB as PostgreSQL
   participant JWT as JwtService
 
-  UI->>API: POST /api/auth/login {username, password}
+  UI->>API: POST /api/auth/login
   API->>DB: findByUsername
-  DB-->>API: app_user row (BCrypt hash, role)
+  DB-->>API: app_user row with BCrypt hash and role
   API->>API: passwordEncoder.matches
   API->>JWT: issueToken(username, role)
-  JWT-->>API: HS256 token, exp 60 min
-  API-->>UI: {accessToken, tokenType, username, role}
-  Note over UI: token kept in memory only,<br/>a refresh signs the user out
-  UI->>API: subsequent calls with Authorization: Bearer
+  JWT-->>API: HS256 token, expires in 60 min
+  API-->>UI: accessToken, tokenType, username, role
+  Note over UI: token kept in memory only
+  UI->>API: later calls send Authorization Bearer
 ```
 
 Unknown username and wrong password return the same 401, so the endpoint cannot
@@ -97,26 +83,18 @@ different thing entirely, and the only thing the app keeps there is nothing at
 all (the JWT is held in memory).
 
 ```mermaid
-flowchart TB
-  subgraph Win["Windows host"]
-    App["Spring Boot<br/>mvn spring-boot:run"]
-    Repo["repo working tree<br/>no database files here"]
+%%{init: {"flowchart": {"curve": "linear", "rankSpacing": 70}}}%%
+flowchart LR
+  App["Spring Boot on the Windows host"]
 
-    subgraph DD["Docker Desktop · WSL2 Linux VM"]
-      subgraph C["container java-bootcamp-capstone-postgres-1<br/>image postgres:17"]
-        PG["postgres server<br/>listening on 5432"]
-        Mount["/var/lib/postgresql/data"]
-      end
-      Vol[("named volume<br/>java-bootcamp-capstone_crm_pgdata<br/>driver: local")]
-      VHDX["WSL2 backing disk<br/>%LOCALAPPDATA%\Docker\wsl"]
-    end
+  subgraph Docker["Docker Desktop — WSL2 Linux VM"]
+    direction TB
+    PG["postgres:17 container, listening on 5432"]
+    Vol[("named volume crm_pgdata")]
   end
 
-  App -->|"JDBC · localhost:5432<br/>published as 0.0.0.0:5432->5432/tcp"| PG
-  PG --> Mount
-  Mount -.->|"bind"| Vol
-  Vol -.->|"bytes ultimately stored in"| VHDX
-  Repo -.->|"docker-compose.yml declares<br/>the service and volume"| C
+  App -- "JDBC to localhost:5432" --> PG
+  PG -- "/var/lib/postgresql/data" --> Vol
 ```
 
 The volume's reported mountpoint is
@@ -137,6 +115,47 @@ Consequences worth knowing:
 The container currently holds two tables: `app_user` and `flyway_schema_history`.
 Flyway creates and tracks both, so a wiped volume rebuilds itself on the next
 startup and the seeder re-adds `agent1` and `admin1`.
+
+## Deployment
+
+The container view above is deliberately environment-agnostic. This is where the
+same containers get mapped onto machines.
+
+Only the database has moved to Azure. The API, the UI and Kafka all still run on
+a developer laptop, so there is no deployed application yet — just a hosted
+database that a local application can point at.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "linear", "rankSpacing": 70, "nodeSpacing": 45}}}%%
+flowchart LR
+  subgraph Laptop["Developer laptop"]
+    direction TB
+    UI["Vite dev server :5173"]
+    Api["Spring Boot :8080"]
+    Kafka["Kafka in Docker :9092"]
+    LocalPG["postgres:17 in Docker :5432"]
+  end
+
+  subgraph Azure["Microsoft Azure"]
+    AzurePG[("Azure Database for PostgreSQL Flexible Server, version 18, TLS required")]
+  end
+
+  UI --> Api
+  Api --> Kafka
+  Api -- "default when DB_URL is unset" --> LocalPG
+  Api -- "when DB_URL is set in .env" --> AzurePG
+```
+
+Which database is used is decided entirely by `.env`. Nothing in the committed
+configuration names the Azure server, and the same build runs against either.
+
+| | Local | Azure |
+| ---- | ----- | ----- |
+| Chosen by | defaults in `application.yml` | `DB_URL`, `DB_USER`, `DB_PASSWORD` in `.env` |
+| PostgreSQL version | 17 | 18 |
+| Transport | plaintext on localhost | TLS 1.2, `sslmode=require` |
+| Schema created by | Flyway on first start | Flyway on first start |
+| Used by tests | no — tests use H2, except `AppUserRepositoryIT` which pins localhost | never |
 
 ## Persistence
 

@@ -45,6 +45,64 @@ Customer data is stored in memory and resets when the application restarts.
 - Maven 3.9 or later
 - Docker Desktop with Docker Compose
 
+## Quick setup
+
+Nine steps from clone to a working login. PowerShell shown; `cmd` differs only at step 3.
+
+### Local (everything on your machine)
+
+1. `git clone <repository-url>` then `cd java-bootcamp-capstone`
+2. `docker compose up -d` — starts Postgres and Kafka
+3. `Copy-Item .env.example .env` — `cmd`: `copy .env.example .env`
+4. Open `.env` and set `JWT_SECRET` to any string of 32 characters or more
+5. `cd backend` then `.\mvnw spring-boot:run` — Flyway builds the schema and seeds the demo accounts
+6. New terminal: `cd frontend` then `npm ci` then `npm run dev`
+7. Open <http://localhost:5173> and sign in as `agent1` / `agent1`
+
+Leave `DB_URL`, `DB_USER` and `DB_PASSWORD` commented out — the defaults already
+point at the container from step 2. Nothing else needs configuring.
+
+### Azure (optional, shared database)
+
+8. Get the admin password from a teammate out of band
+9. Uncomment the three `DB_` lines in `.env`, paste the password, restart the backend
+
+Swapping back to local is commenting those three lines out again. Tests are
+unaffected either way: they run on in-memory H2 and never touch Azure.
+
+### Verify your setup
+
+With the backend running, from the repository root:
+
+```powershell
+.\scriptserify-setup.ps1
+```
+
+It checks nine things and prints a pass/fail table: `.env` exists and the secret
+is long enough, which database is configured, whether the local container is up,
+whether the application answers, whether `agent1` can log in, whether the
+datasource is reachable, whether an authenticated read succeeds, and — the one
+people forget — that an anonymous request is still refused with 401. It exits
+non-zero if anything fails, so it also works as a pre-push check.
+
+The "database mode" line reads `.env`, not the running process. If you edit
+`.env` while the backend is up, restart it before trusting that line.
+
+Reading the datasource detail needs a login, because `management.endpoint.health.show-details`
+is `when-authorized` rather than `always`: the health endpoint stays public so a
+container orchestrator can probe it, but an anonymous caller gets only `UP` or
+`DOWN`, never the database vendor, connection state, or disk figures.
+
+### If something fails
+
+| Symptom | Cause |
+| ------- | ----- |
+| `Could not resolve placeholder 'JWT_SECRET'` | step 4 was skipped, or `.env` is not at the repository root |
+| `Connection refused` on 5432 | Docker Desktop is not running, or step 2 was skipped |
+| Login returns 401 immediately after startup | the seeder has not finished; retry in a second |
+| Azure connection hangs with no error | blocked by the Azure firewall rules — ask the server owner |
+| `password authentication failed` | wrong password, or extra characters pasted into `.env` |
+
 ## Download the project
 
 Clone the repository, then enter its directory:

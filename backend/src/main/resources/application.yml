@@ -62,6 +62,17 @@ spring:
 server:
   port: 8080
 
+management:
+  endpoint:
+    health:
+      # when-authorized, not always: the health endpoint is public so the
+      # container orchestrator can probe it, and "always" would hand an
+      # anonymous caller the database vendor, connection state and disk figures.
+      # Signed-in users get the detail, which is what the setup check reads.
+      show-details: when-authorized
+      probes:
+        enabled: true
+
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n"
