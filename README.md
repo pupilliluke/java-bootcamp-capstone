@@ -132,12 +132,23 @@ mvn spring-boot:run
 Could not resolve placeholder 'JWT_SECRET' in value "${JWT_SECRET}"
 ```
 
-Set it before running the backend:
+The easiest local setup is a `backend/config/application.yml`, which Spring Boot reads automatically at higher precedence than the packaged config. No profile and no environment variable are needed, and `backend/config/` is gitignored so the value never leaves your machine:
+
+```yaml
+crm:
+  security:
+    jwt:
+      secret: local-dev-secret-at-least-32-bytes-long
+```
+
+Create that file once and `mvn spring-boot:run` just works. Alternatively, set the environment variable per shell:
 
 ```powershell
-$env:JWT_SECRET = "local-dev-secret-at-least-32-bytes-long!"
+$env:JWT_SECRET = "local-dev-secret-at-least-32-bytes-long"
 mvn spring-boot:run
 ```
+
+Deployed environments supply `JWT_SECRET` from their own secret store; nothing is committed either way.
 
 HS256 signs with a 256-bit key, so the value must be at least 32 characters. A shorter one also fails at startup rather than producing weakly signed tokens.
 

@@ -20,6 +20,8 @@ dist/
 .env
 .env.*
 !.env.example
+# Spring reads ./config/ automatically; local secrets live there, never in git
+backend/config/
 *.pem
 *.key
 *.p12

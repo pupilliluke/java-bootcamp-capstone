@@ -2,6 +2,23 @@ spring:
   application:
     name: crm
 
+  # Local container credentials, overridden by the environment in any deployed
+  # setting. Unlike the JWT secret these are not left blank: they guard a
+  # throwaway localhost container and are already visible in docker-compose.yml,
+  # whereas a leaked signing key would let anyone mint a valid ADMIN token.
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/crm}
+    username: ${DB_USER:crm}
+    password: ${DB_PASSWORD:crm}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
