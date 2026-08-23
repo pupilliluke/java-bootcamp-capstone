@@ -7,6 +7,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -40,15 +43,29 @@ class SecurityRulesTest {
                 .andExpect(status().isForbidden());
     }
 
-    // Flipping the last character invalidates the HMAC, which is the whole point
-    // of signing: the role claim cannot be edited by whoever holds the token.
+    // The privilege-escalation attempt the signature exists to stop: take a
+    // legitimate AGENT token, rewrite the role claim to ADMIN, keep the original
+    // signature. The HMAC covers the payload, so it no longer matches.
+    //
+    // Tampering the payload rather than the signature is deliberate. A 32-byte
+    // HMAC base64url-encodes to 43 characters whose last character carries only
+    // two significant bits, so altering that character often decodes to the very
+    // same bytes and the token stays valid.
     @Test
-    void tamperedTokenIsRejected() throws Exception {
+    void tokenWithAnEditedRoleClaimIsRejected() throws Exception {
         String token = jwtService.issueToken("agent1", "AGENT");
-        String tampered = token.substring(0, token.length() - 1)
-                + (token.endsWith("A") ? "B" : "A");
+        String[] parts = token.split("\\.");
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + tampered))
+        String payload = new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8);
+        String elevated = payload.replace("\"role\":\"AGENT\"", "\"role\":\"ADMIN\"");
+        assertThat(elevated).isNotEqualTo(payload);
+
+        String forged = parts[0] + "."
+                + Base64.getUrlEncoder().withoutPadding()
+                        .encodeToString(elevated.getBytes(StandardCharsets.UTF_8))
+                + "." + parts[2];
+
+        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
     }
 

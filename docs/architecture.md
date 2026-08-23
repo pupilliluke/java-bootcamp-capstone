@@ -89,6 +89,55 @@ Unknown username and wrong password return the same 401, so the endpoint cannot
 be used to enumerate accounts. A federated account has a null `password_hash`,
 which can never satisfy a BCrypt check.
 
+## Where the local database actually lives
+
+It is a Docker container, not a file in the repository and not anything in the
+browser. Nothing about it touches `localStorage` — that is browser storage, a
+different thing entirely, and the only thing the app keeps there is nothing at
+all (the JWT is held in memory).
+
+```mermaid
+flowchart TB
+  subgraph Win["Windows host"]
+    App["Spring Boot<br/>mvn spring-boot:run"]
+    Repo["repo working tree<br/>no database files here"]
+
+    subgraph DD["Docker Desktop · WSL2 Linux VM"]
+      subgraph C["container java-bootcamp-capstone-postgres-1<br/>image postgres:17"]
+        PG["postgres server<br/>listening on 5432"]
+        Mount["/var/lib/postgresql/data"]
+      end
+      Vol[("named volume<br/>java-bootcamp-capstone_crm_pgdata<br/>driver: local")]
+      VHDX["WSL2 backing disk<br/>%LOCALAPPDATA%\Docker\wsl"]
+    end
+  end
+
+  App -->|"JDBC · localhost:5432<br/>published as 0.0.0.0:5432->5432/tcp"| PG
+  PG --> Mount
+  Mount -.->|"bind"| Vol
+  Vol -.->|"bytes ultimately stored in"| VHDX
+  Repo -.->|"docker-compose.yml declares<br/>the service and volume"| C
+```
+
+The volume's reported mountpoint is
+`/var/lib/docker/volumes/java-bootcamp-capstone_crm_pgdata/_data`. That is a path
+*inside the Linux VM*, not a Windows directory — the real bytes sit in the WSL2
+virtual disk that Docker Desktop manages.
+
+Consequences worth knowing:
+
+| Action | Data |
+| ------ | ---- |
+| `docker compose stop` / restart | kept |
+| `docker compose down` | kept — the volume outlives the container |
+| `docker compose down -v` | **destroyed** — the volume is deleted |
+| Deleting the repository | kept — the volume is not in the working tree |
+| `mvn test` | untouched — tests run on in-memory H2 |
+
+The container currently holds two tables: `app_user` and `flyway_schema_history`.
+Flyway creates and tracks both, so a wiped volume rebuilds itself on the next
+startup and the seeder re-adds `agent1` and `admin1`.
+
 ## Persistence
 
 `app_user` is the only table so far. `password_hash` is nullable and `email` is
