@@ -26,13 +26,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * shared cloud database.
  */
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/crm",
+        // Resolved from .env, the same keys docker-compose uses, so this cannot
+        // drift from whatever the developer's container was actually created
+        // with. Pinned to localhost explicitly rather than activating the local
+        // profile, because .env may also carry Azure values and a test run must
+        // never write to a shared cloud database.
+        "spring.datasource.url=jdbc:postgresql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:5432}/${LOCAL_DB_NAME}",
         // The driver has to be overridden too. src/test/resources pins it to H2
         // for the rest of the suite, and a leftover org.h2.Driver rejects a
         // postgresql:// URL outright.
         "spring.datasource.driver-class-name=org.postgresql.Driver",
-        "spring.datasource.username=crm",
-        "spring.datasource.password=crm"
+        "spring.datasource.username=${LOCAL_DB_USER}",
+        "spring.datasource.password=${LOCAL_DB_PASSWORD}"
 })
 @EnabledIf("localPostgresIsReachable")
 class AppUserRepositoryIT {

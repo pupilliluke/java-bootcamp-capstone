@@ -2,6 +2,12 @@ spring:
   application:
     name: crm
 
+  # Which database is used is chosen by profile, not by editing this file.
+  #   local (default) -> the docker-compose container
+  #   azure           -> the hosted server, values supplied by .env
+  profiles:
+    default: local
+
   # Secrets come from a gitignored .env at the repository root. The [.properties]
   # hint tells Spring to parse it as a properties file. Both candidate paths are
   # listed because the import resolves against the JVM working directory, and a
@@ -13,17 +19,6 @@ spring:
   # not change between a laptop and Azure.
   config:
     import: optional:file:./.env[.properties],optional:file:../.env[.properties]
-
-  # Defaults point at the local docker-compose Postgres. Set DB_URL, DB_USER and
-  # DB_PASSWORD in .env to target Azure instead — the Azure URL needs
-  # ?sslmode=require. Unlike the JWT secret these carry defaults: they guard a
-  # throwaway localhost container whose credentials are already visible in
-  # docker-compose.yml, whereas a leaked signing key would let anyone mint a
-  # valid ADMIN token.
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/crm}
-    username: ${DB_USER:crm}
-    password: ${DB_PASSWORD:crm}
 
   jpa:
     hibernate:

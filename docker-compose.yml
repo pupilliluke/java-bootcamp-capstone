@@ -1,23 +1,33 @@
+# Compose reads the gitignored .env at the repository root automatically, and it
+# is the same file Spring imports. One source for both, so the container and the
+# application cannot drift apart and no credential is committed.
 services:
   kafka:
     image: apache/kafka:4.3.1
+    # Comes back whenever the Docker daemon starts, so nobody has to remember to
+    # start it. "unless-stopped" rather than "always": an explicit
+    # `docker compose stop` stays stopped instead of resurrecting itself.
+    restart: unless-stopped
     ports:
       - "9092:9092"
 
   postgres:
     image: postgres:17
+    restart: unless-stopped
     # No container_name on purpose: compose scopes it to the project, so it
     # cannot collide with the crm-postgres-* containers the labs leave behind.
     ports:
-      - "5432:5432"
+      - "${LOCAL_DB_PORT:-5432}:5432"
     environment:
-      POSTGRES_DB: crm
-      POSTGRES_USER: crm
-      POSTGRES_PASSWORD: crm
+      POSTGRES_DB: ${LOCAL_DB_NAME:?set LOCAL_DB_NAME in .env}
+      POSTGRES_USER: ${LOCAL_DB_USER:?set LOCAL_DB_USER in .env}
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?set LOCAL_DB_PASSWORD in .env}
     volumes:
       - crm_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      # Doubled $$ so compose passes the variable through for the shell inside
+      # the container to expand, rather than substituting it here.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20

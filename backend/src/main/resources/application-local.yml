@@ -1,0 +1,11 @@
+# Local profile — the default. Points at the PostgreSQL container defined in
+# docker-compose.yml at the repository root.
+#
+# Every value comes from the gitignored .env, which docker-compose reads too, so
+# the container and the application cannot drift apart and no credential is
+# committed. Only the shape lives here.
+spring:
+  datasource:
+    url: jdbc:postgresql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:5432}/${LOCAL_DB_NAME}
+    username: ${LOCAL_DB_USER}
+    password: ${LOCAL_DB_PASSWORD}
