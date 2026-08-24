@@ -1,10 +1,19 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import CustomerFormPage from './CustomerFormPage'
+
+// Hoisted so the mock factory below can close over them: vi.mock is lifted
+// above the imports, and a plain const would not exist yet when it runs.
+const { create, update } = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }))
+vi.mock('../api/customers', () => ({ customersApi: { create, update } }))
 
 const navigate = vi.fn()
 const onCreated = vi.fn()
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 const editCustomer = {
   customerId: 'CUS-1001',
@@ -30,11 +39,31 @@ describe('CustomerFormPage', () => {
     expect(screen.getByRole('button', { name: /^save$/i })).toBeEnabled()
   })
 
-  it('shows the read-only notice in edit mode', () => {
+  it('prefills the form and allows saving in edit mode', () => {
     render(<CustomerFormPage navigate={navigate} onCreated={onCreated} edit={editCustomer} />)
     expect(screen.getByText('Edit Customer')).toBeInTheDocument()
-    // The "no PUT endpoint" note renders a <code> element we can match cleanly.
-    expect(screen.getByText('PUT /api/customers')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
+    expect(screen.getByPlaceholderText('Acme Corporation')).toHaveValue('Amina Khan')
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeEnabled()
+  })
+
+  // The behaviour worth pinning. Before PUT existed the form called create() in
+  // both modes, so editing an existing customer hit the duplicate-id check and
+  // failed. A regression to that would still render fine and still look right.
+  it('saves an edit through update, not create', async () => {
+    update.mockResolvedValue(editCustomer)
+    const user = userEvent.setup()
+    render(<CustomerFormPage navigate={navigate} onCreated={onCreated} edit={editCustomer} />)
+
+    await user.clear(screen.getByPlaceholderText('(555) 123-4567'))
+    await user.type(screen.getByPlaceholderText('(555) 123-4567'), '555-0199')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        'CUS-1001',
+        expect.objectContaining({ phone: '555-0199', fullName: 'Amina Khan' }),
+      ),
+    )
+    expect(create).not.toHaveBeenCalled()
   })
 })
