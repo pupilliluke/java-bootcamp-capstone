@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.slf4j.MDC;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -35,6 +36,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         null,
                         List.of(new SimpleGrantedAuthority("ROLE_" + jwtService.parseRole(token))));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                // Recorded here because Spring Security clears the context before
+                // the outermost filter's finally block runs, so the request logger
+                // cannot read it directly. MDC is per-thread and survives.
+                MDC.put("user", jwtService.parseSubject(token));
             } catch (RuntimeException ignored) {
                 // A bad token leaves the request anonymous rather than failing it
                 // here; the filter chain then answers 401 through the entry point.
