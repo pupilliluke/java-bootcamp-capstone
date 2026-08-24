@@ -5,6 +5,10 @@ import com.capstone.crm.api.dto.UpdateUserRequest;
 import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.entity.AppUser;
 import com.capstone.crm.entity.UserRole;
+import com.capstone.crm.exception.DuplicateUserException;
+import com.capstone.crm.exception.LastAdminException;
+import com.capstone.crm.exception.SelfUserModificationException;
+import com.capstone.crm.exception.UserNotFoundException;
 import com.capstone.crm.repository.AppUserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,8 +79,34 @@ class AdminUserServiceTest {
         when(userRepository.findById(404L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.get(404L))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(UserNotFoundException.class)
                 .hasMessage("User not found: 404");
+    }
+
+    @Test
+    void createRejectsDuplicateUsernameIgnoringCase() {
+        CreateUserRequest request = new CreateUserRequest(
+                "ADMIN1", "unique@example.test", "password123", UserRole.AGENT);
+        when(userRepository.existsByUsernameIgnoreCase("ADMIN1")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateUserException.class)
+                .hasMessage("Username is already in use: ADMIN1");
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createRejectsDuplicateEmailIgnoringCase() {
+        CreateUserRequest request = new CreateUserRequest(
+                "unique-user", "ADMIN1@EXAMPLE.TEST", "password123", UserRole.AGENT);
+        when(userRepository.existsByEmailIgnoreCase("ADMIN1@EXAMPLE.TEST")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(DuplicateUserException.class)
+                .hasMessage("Email is already in use: ADMIN1@EXAMPLE.TEST");
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
     }
 
     @Test
@@ -121,8 +151,51 @@ class AdminUserServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(currentAdmin));
 
         assertThatThrownBy(() -> service.update(1L, request, "admin1"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SelfUserModificationException.class)
                 .hasMessage("Administrators cannot update their own account");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateRejectsEmailBelongingToAnotherUser() {
+        AppUser existing = user("agent-two", "old@example.test", "old-hash", UserRole.AGENT);
+        UpdateUserRequest request = new UpdateUserRequest(
+                "admin1@example.test", null, UserRole.AGENT, true);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(existing));
+        when(userRepository.existsByEmailIgnoreCaseAndIdNot("admin1@example.test", 2L))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(2L, request, "admin1"))
+                .isInstanceOf(DuplicateUserException.class)
+                .hasMessage("Email is already in use: admin1@example.test");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCannotDisableTheFinalEnabledAdmin() {
+        AppUser finalAdmin = user("admin-two", "admin-two@example.test", "hash", UserRole.ADMIN);
+        UpdateUserRequest request = new UpdateUserRequest(
+                "admin-two@example.test", null, UserRole.ADMIN, false);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(finalAdmin));
+        when(userRepository.countByRoleAndEnabledTrue(UserRole.ADMIN)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.update(2L, request, "admin1"))
+                .isInstanceOf(LastAdminException.class)
+                .hasMessage("The final enabled administrator cannot be disabled or demoted");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateCannotDemoteTheFinalEnabledAdmin() {
+        AppUser finalAdmin = user("admin-two", "admin-two@example.test", "hash", UserRole.ADMIN);
+        UpdateUserRequest request = new UpdateUserRequest(
+                "admin-two@example.test", null, UserRole.AGENT, true);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(finalAdmin));
+        when(userRepository.countByRoleAndEnabledTrue(UserRole.ADMIN)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.update(2L, request, "admin1"))
+                .isInstanceOf(LastAdminException.class)
+                .hasMessage("The final enabled administrator cannot be disabled or demoted");
         verify(userRepository, never()).save(any());
     }
 
@@ -142,8 +215,20 @@ class AdminUserServiceTest {
         when(userRepository.findById(1L)).thenReturn(Optional.of(currentAdmin));
 
         assertThatThrownBy(() -> service.delete(1L, "admin1"))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(SelfUserModificationException.class)
                 .hasMessage("Administrators cannot delete their own account");
+        verify(userRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteCannotRemoveTheFinalEnabledAdmin() {
+        AppUser finalAdmin = user("admin-two", "admin-two@example.test", "hash", UserRole.ADMIN);
+        when(userRepository.findById(2L)).thenReturn(Optional.of(finalAdmin));
+        when(userRepository.countByRoleAndEnabledTrue(UserRole.ADMIN)).thenReturn(1L);
+
+        assertThatThrownBy(() -> service.delete(2L, "admin1"))
+                .isInstanceOf(LastAdminException.class)
+                .hasMessage("The final enabled administrator cannot be deleted");
         verify(userRepository, never()).delete(any());
     }
 

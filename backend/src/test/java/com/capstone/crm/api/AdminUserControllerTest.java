@@ -98,6 +98,57 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void malformedRoleReturnsBadRequest() throws Exception {
+        String adminToken = login("admin1", "admin1", "ADMIN");
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "invalid-role",
+                                  "email": "invalid-role@example.test",
+                                  "password": "password123",
+                                  "role": "SUPERUSER"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Malformed request body"));
+    }
+
+    @Test
+    void duplicateUserReturnsConflict() throws Exception {
+        String adminToken = login("admin1", "admin1", "ADMIN");
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "ADMIN1",
+                                  "email": "unique@example.test",
+                                  "password": "password123",
+                                  "role": "AGENT"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Username is already in use")));
+    }
+
+    @Test
+    void missingUserReturnsNotFound() throws Exception {
+        String adminToken = login("admin1", "admin1", "ADMIN");
+
+        mockMvc.perform(get("/api/admin/users/{userId}", 999_999)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("User not found: 999999"));
+    }
+
+    @Test
     void adminCanGetAndUpdateAnotherUser() throws Exception {
         AppUser target = saveUser("controller-update", "before@example.test", UserRole.AGENT);
         String adminToken = login("admin1", "admin1", "ADMIN");
@@ -138,6 +189,32 @@ class AdminUserControllerTest {
                 .andExpect(status().isNoContent());
 
         assertThat(users.findById(target.getId())).isEmpty();
+    }
+
+    @Test
+    void adminCannotUpdateOrDeleteOwnAccount() throws Exception {
+        AppUser admin = users.findByUsername("admin1").orElseThrow();
+        String adminToken = login("admin1", "admin1", "ADMIN");
+
+        mockMvc.perform(put("/api/admin/users/{userId}", admin.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "admin1@example.test",
+                                  "role": "ADMIN",
+                                  "enabled": true
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "Administrators cannot update their own account"));
+
+        mockMvc.perform(delete("/api/admin/users/{userId}", admin.getId())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "Administrators cannot delete their own account"));
     }
 
     private AppUser saveUser(String username, String email, UserRole role) {

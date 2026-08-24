@@ -4,6 +4,11 @@ import com.capstone.crm.api.dto.CreateUserRequest;
 import com.capstone.crm.api.dto.UpdateUserRequest;
 import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.entity.AppUser;
+import com.capstone.crm.entity.UserRole;
+import com.capstone.crm.exception.DuplicateUserException;
+import com.capstone.crm.exception.LastAdminException;
+import com.capstone.crm.exception.SelfUserModificationException;
+import com.capstone.crm.exception.UserNotFoundException;
 import com.capstone.crm.repository.AppUserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -39,9 +44,14 @@ public class AdminUserService {
 
     @Transactional
     public UserResponse create(CreateUserRequest request) {
+        String username = request.username().trim();
+        String email = request.email().trim();
+        rejectDuplicateUsername(username);
+        rejectDuplicateEmail(email);
+
         AppUser user = new AppUser(
-                request.username(),
-                request.email(),
+                username,
+                email,
                 passwordEncoder.encode(request.password()),
                 request.role()
         );
@@ -56,12 +66,18 @@ public class AdminUserService {
             String actingUsername) {
         AppUser user = findUser(userId);
 
-        if (user.getUsername().equals(actingUsername)) {
-            throw new IllegalArgumentException(
+        if (user.getUsername().equalsIgnoreCase(actingUsername)) {
+            throw new SelfUserModificationException(
                     "Administrators cannot update their own account");
         }
 
-        user.setEmail(request.email());
+        String email = request.email().trim();
+        if (userRepository.existsByEmailIgnoreCaseAndIdNot(email, userId)) {
+            throw new DuplicateUserException("Email is already in use: " + email);
+        }
+        ensureNotRemovingLastEnabledAdmin(user, request.role(), request.enabled());
+
+        user.setEmail(email);
         user.setRole(request.role());
         user.setEnabled(request.enabled());
 
@@ -78,10 +94,11 @@ public class AdminUserService {
     public void delete(Long userId, String actingUsername) {
         AppUser user = findUser(userId);
 
-        if (user.getUsername().equals(actingUsername)) {
-            throw new IllegalArgumentException(
+        if (user.getUsername().equalsIgnoreCase(actingUsername)) {
+            throw new SelfUserModificationException(
                     "Administrators cannot delete their own account");
         }
+        ensureNotDeletingLastEnabledAdmin(user);
 
         userRepository.delete(user);
     }
@@ -89,8 +106,43 @@ public class AdminUserService {
     private AppUser findUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() ->
-                        new IllegalArgumentException(
+                        new UserNotFoundException(
                                 "User not found: " + userId));
+    }
+
+    private void rejectDuplicateUsername(String username) {
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
+            throw new DuplicateUserException("Username is already in use: " + username);
+        }
+    }
+
+    private void rejectDuplicateEmail(String email) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new DuplicateUserException("Email is already in use: " + email);
+        }
+    }
+
+    private void ensureNotRemovingLastEnabledAdmin(
+            AppUser current,
+            UserRole requestedRole,
+            boolean requestedEnabled) {
+        boolean removesEnabledAdmin = current.getRole() == UserRole.ADMIN
+                && current.isEnabled()
+                && (requestedRole != UserRole.ADMIN || !requestedEnabled);
+        if (removesEnabledAdmin
+                && userRepository.countByRoleAndEnabledTrue(UserRole.ADMIN) <= 1) {
+            throw new LastAdminException(
+                    "The final enabled administrator cannot be disabled or demoted");
+        }
+    }
+
+    private void ensureNotDeletingLastEnabledAdmin(AppUser user) {
+        if (user.getRole() == UserRole.ADMIN
+                && user.isEnabled()
+                && userRepository.countByRoleAndEnabledTrue(UserRole.ADMIN) <= 1) {
+            throw new LastAdminException(
+                    "The final enabled administrator cannot be deleted");
+        }
     }
 
     private UserResponse toResponse(AppUser user) {
