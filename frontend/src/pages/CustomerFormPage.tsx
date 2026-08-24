@@ -28,17 +28,26 @@ export default function CustomerFormPage({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!valid || isEdit) return
+    if (!valid) return
     setSaving(true)
     setError(null)
     try {
-      await customersApi.create({
-        customerId: customerId.trim(),
-        fullName: fullName.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        status,
-      })
+      if (isEdit) {
+        await customersApi.update(edit.customerId, {
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          status,
+        })
+      } else {
+        await customersApi.create({
+          customerId: customerId.trim(),
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim() || undefined,
+          status,
+        })
+      }
       onCreated()
       navigate({ name: 'details', customerId: customerId.trim() })
     } catch (err) {
@@ -55,7 +64,7 @@ export default function CustomerFormPage({
         <h1>{isEdit ? 'Edit Customer' : 'Add Customer'}</h1>
         <div className="actions-row">
           <button className="btn-secondary" onClick={() => navigate({ name: 'customers' })}>Cancel</button>
-          <button className="btn-primary" form="cust-form" type="submit" disabled={!valid || saving || isEdit}>
+          <button className="btn-primary" form="cust-form" type="submit" disabled={!valid || saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
@@ -63,13 +72,6 @@ export default function CustomerFormPage({
 
       <div className="card">
         <p className="section-title">Customer Information</p>
-
-        {isEdit && (
-          <p className="note" style={{ marginTop: 0 }}>
-            ⚠️ Editing is read-only for now — the backend has no <code>PUT /api/customers</code>{' '}
-            endpoint, so changes can’t be saved yet.
-          </p>
-        )}
 
         <form id="cust-form" onSubmit={handleSubmit}>
           <div className="form-grid">
@@ -79,21 +81,21 @@ export default function CustomerFormPage({
             </div>
             <div className="form-field">
               <label>Status</label>
-              <select value={status} disabled={isEdit} onChange={(e) => setStatus(e.target.value as CustomerStatus)}>
+              <select value={status} onChange={(e) => setStatus(e.target.value as CustomerStatus)}>
                 {STATUSES.map((s) => <option key={s}>{s}</option>)}
               </select>
             </div>
             <div className="form-field">
               <label>Full Name <span className="req">*</span></label>
-              <input value={fullName} disabled={isEdit} onChange={(e) => setFullName(e.target.value)} placeholder="Acme Corporation" />
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Acme Corporation" />
             </div>
             <div className="form-field">
               <label>Email <span className="req">*</span></label>
-              <input value={email} disabled={isEdit} onChange={(e) => setEmail(e.target.value)} placeholder="info@acme.com" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="info@acme.com" />
             </div>
             <div className="form-field">
               <label>Phone</label>
-              <input value={phone} disabled={isEdit} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" />
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" />
             </div>
           </div>
 
