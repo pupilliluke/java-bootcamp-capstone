@@ -18,6 +18,13 @@ export interface CreateCustomer {
   phone?: string
   status: CustomerStatus
 }
+// PUT /api/customers/{id} body (CustomerUpdateDTO)
+export interface CustomerUpdate {
+  fullName: string
+  email: string
+  phone?: string
+  status: CustomerStatus
+}
 
 export type Channel = 'PHONE' | 'EMAIL' | 'CHAT'
 

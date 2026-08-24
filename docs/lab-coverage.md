@@ -11,7 +11,7 @@ at the defense asks "did you use what you learned?"
 **Key:** `[x]` done · `[~]` partly done · `[ ]` not yet · **(stretch)** unlikely
 in six weeks, and fine to skip
 
-**Where we are: 49 done, 12 partly done, 44 to go, across 53 labs.** Nine of the
+**Where we are: 51 done, 12 partly done, 42 to go, across 53 labs.** Nine of the
 remaining are marked stretch, so the realistic target is closer to 96 than 105.
 Most of what is left sits in Week 5 — containers, pipeline, Kubernetes — which is
 one person's lane and largely independent of the rest.
@@ -208,8 +208,8 @@ one person's lane and largely independent of the rest.
 - [ ] Three probes, and a rollback we have actually rehearsed
 
 ### Lab 43 — GitHub CI/CD pipeline
-- [ ] Every push builds and tests
-- [ ] Built once, with an identity we can trace, and no secrets in logs
+- [x] Every push builds and tests
+- [x] Built once, with an identity we can trace, and no secrets in logs
 
 ### Lab 44 — Continuous delivery and promotion
 - [ ] One artifact promoted between environments, never rebuilt
