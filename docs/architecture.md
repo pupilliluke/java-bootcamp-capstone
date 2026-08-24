@@ -116,6 +116,94 @@ The container currently holds two tables: `app_user` and `flyway_schema_history`
 Flyway creates and tracks both, so a wiped volume rebuilds itself on the next
 startup and the seeder re-adds `agent1` and `admin1`.
 
+## Messaging: today and the target
+
+### Today
+
+Every box below exists and works. What is missing is anywhere for the data to
+land: the service validates, publishes, and returns, and the consumer logs. If
+Kafka's retention window passes, the interaction is gone, and nothing can answer
+"what interactions has this customer had?"
+
+```mermaid
+%%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
+flowchart TB
+  Ctrl["InteractionController, POST /api/interactions"]
+  Svc["InteractionService.createAndPublish"]
+  Cust["CustomerService, in-memory map, validation only"]
+  Prod["InteractionEventProducer"]
+  Topic[["topic crm.interaction.v1"]]
+  Cons["InteractionEventConsumer"]
+  Seen["InMemoryProcessedEventStore, a ConcurrentHashMap"]
+  Handler["LoggingInteractionEventHandler"]
+  Out["a log line, and nothing else"]
+  DLT[["topic crm.interaction.v1.DLT"]]
+
+  Ctrl --> Svc
+  Svc -- "customer exists?" --> Cust
+  Svc --> Prod
+  Prod --> Topic
+  Topic --> Cons
+  Cons -- "seen before?" --> Seen
+  Cons --> Handler
+  Handler --> Out
+  Cons -- "invalid or unsupported version" --> DLT
+```
+
+### Target
+
+Two changes carry almost all the value. The service writes the interaction
+inside a transaction before publishing, and the consumer does something durable
+so that its idempotency guarantee protects something real.
+
+```mermaid
+%%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
+flowchart TB
+  Ctrl["InteractionController"]
+  Svc["InteractionService, @Transactional"]
+  CustT[("customer table")]
+  IntT[("interaction table")]
+  OutT[("outbox table")]
+  Relay["outbox relay, publishes committed rows"]
+  Topic[["topic crm.interaction.v1"]]
+  Cons["InteractionEventConsumer"]
+  SeenT[("processed_event table")]
+  Handler["audit handler"]
+  AuditT[("interaction_audit table")]
+  DLT[["topic crm.interaction.v1.DLT"]]
+
+  Ctrl --> Svc
+  Svc -- "customer exists?" --> CustT
+  Svc -- "insert interaction" --> IntT
+  Svc -- "insert event, same transaction" --> OutT
+  OutT --> Relay
+  Relay --> Topic
+  Topic --> Cons
+  Cons -- "claim event id" --> SeenT
+  Cons --> Handler
+  Handler --> AuditT
+  Cons -- "poison message" --> DLT
+```
+
+### What changes, and why
+
+| | Today | Target | Why |
+| ---- | ----- | ------ | --- |
+| Interaction record | none | row in `interaction`, written before publishing | The rubric asks for durable interactions with verified persistence. Today a `202 Accepted` makes it look saved when nothing was. |
+| Customer lookup | in-memory map | `customer` table | Survives a restart. Also what Lab 50's UI-to-database flow needs. |
+| Publish | directly from the service | outbox row, published by a relay | Writing the row and publishing separately is a dual write: the transaction can commit and the publish fail, leaving the database and the log disagreeing. One transaction removes the gap. |
+| Idempotency store | `ConcurrentHashMap` | `processed_event` table | Per-JVM state is per-replica state. With more than one pod, each has its own set, and the exactly-once guarantee stops holding. |
+| Consumer effect | a log line | a durable audit row | Reprocessing a log statement costs nothing, so idempotency currently protects nothing. Give the consumer a real side effect and the guarantee starts to matter. |
+
+The outbox is the part worth naming in the defense even if it is not built. When
+a sponsor asks "what happens if Kafka is down when you save?", the honest answer
+today is that the save succeeds and the event is lost. The outbox is why that
+question has a good answer.
+
+An intermediate step is legitimate: write the interaction row and publish
+directly, accepting the dual write and documenting it as residual risk. That
+alone closes the persistence gap, which is the part that is scored.
+
 ## Deployment
 
 The container view above is deliberately environment-agnostic. This is where the

@@ -9,7 +9,7 @@ PostgreSQL Flexible Server, PostgreSQL 18, PostgreSQL authentication.
 
 ## Ask for the exact symptom first
 
-Have them run `.\scripts\verify-setup.ps1` and send the table. The first four
+Have them run `node scripts/verify-setup.mjs` and send the table. The first four
 rows resolve most cases without any Azure access at all.
 
 ## Symptom table
