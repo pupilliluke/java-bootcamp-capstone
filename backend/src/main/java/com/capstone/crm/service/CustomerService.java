@@ -9,7 +9,6 @@ import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
 import com.capstone.crm.exception.DuplicateCustomerException;
 import com.capstone.crm.repository.CustomerRepository;
-import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,16 +22,6 @@ public class CustomerService {
 
     public CustomerService(CustomerRepository customerRepository) {
         this.customerRepository = customerRepository;
-    }
-
-    @PostConstruct
-    void seedDemoCustomers() {
-        customerRepository.save(new Customer(
-                "CUS-1001", "Amina Khan", "amina.khan@example.test", "555-0101",
-                CustomerStatus.ACTIVE, LocalDateTime.now()));
-        customerRepository.save(new Customer(
-                "CUS-1002", "Ravi Singh", "ravi.singh@example.test", "555-0102",
-                CustomerStatus.ACTIVE, LocalDateTime.now()));
     }
 
     public CustomerResponseDTO create(CustomerRequestDTO request) {

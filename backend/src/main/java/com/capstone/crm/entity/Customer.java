@@ -1,14 +1,37 @@
 package com.capstone.crm.entity;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
 
+@Entity
+@Table(name = "customer")
 public class Customer {
+
+    @Id
+    @Column(name = "customer_id")
     private String customerId;
+
+    @Column(name = "full_name", nullable = false)
     private String fullName;
+
+    @Column(name = "email", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "phone")
     private String phone;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
     private CustomerStatus status;
+
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     public Customer() {}
