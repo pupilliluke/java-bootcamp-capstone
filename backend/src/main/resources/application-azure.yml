@@ -1,0 +1,18 @@
+# Azure profile — the hosted PostgreSQL Flexible Server.
+#
+#   PowerShell:  $env:SPRING_PROFILES_ACTIVE = "azure"; .\mvnw spring-boot:run
+#   cmd:         set "SPRING_PROFILES_ACTIVE=azure" && mvnw spring-boot:run
+#   Maven:       .\mvnw spring-boot:run "-Dspring-boot.run.profiles=azure"
+#
+# No host, user or password appears here. All four come from the gitignored .env,
+# so nothing identifying the server is committed to a public repository, and a
+# deployed environment supplies the same names as environment variables.
+#
+# sslmode=require is built into the URL rather than left to whoever writes .env:
+# Azure refuses the connection without it, and that is not a mistake worth
+# letting anyone make twice.
+spring:
+  datasource:
+    url: jdbc:postgresql://${AZURE_DB_HOST}:${AZURE_DB_PORT:5432}/${AZURE_DB_NAME}?sslmode=require
+    username: ${AZURE_DB_USER}
+    password: ${AZURE_DB_PASSWORD}
