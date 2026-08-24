@@ -1,11 +1,12 @@
 import { http } from './http'
+import type { UserRole } from '../types/user'
 
 // Mirrors LoginResponseDTO on the Spring side.
 export interface LoginResponse {
   accessToken: string
   tokenType: string
   username: string
-  role: string
+  role: UserRole
 }
 
 export const authApi = {

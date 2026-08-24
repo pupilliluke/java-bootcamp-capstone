@@ -10,6 +10,7 @@ export type Page =
   | { name: 'contacts' }
   | { name: 'activities' }
   | { name: 'reports' }
+    | { name: 'admin-users' }
   | { name: 'settings' }
 
 export type Navigate = (page: Page) => void
