@@ -25,21 +25,82 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Transactional
 class AdminUserControllerTest {
 
+    private static final String VALID_CREATE_REQUEST = """
+            {
+              "username": "matrix-user",
+              "email": "matrix-user@example.test",
+              "password": "password123",
+              "role": "AGENT"
+            }
+            """;
+
+    private static final String VALID_UPDATE_REQUEST = """
+            {
+              "email": "matrix-updated@example.test",
+              "role": "ADMIN",
+              "enabled": true
+            }
+            """;
+
     @Autowired MockMvc mockMvc;
     @Autowired AppUserRepository users;
     @Autowired PasswordEncoder passwordEncoder;
 
     @Test
-    void usersEndpointEnforcesAnonymousAgentAdminAccessMatrix() throws Exception {
+    void anonymousCannotAccessAnyAdminUserEndpoint() throws Exception {
         mockMvc.perform(get("/api/admin/users"))
                 .andExpect(status().isUnauthorized());
 
+        mockMvc.perform(get("/api/admin/users/{userId}", 1L))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/admin/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_CREATE_REQUEST))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(put("/api/admin/users/{userId}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_UPDATE_REQUEST))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/admin/users/{userId}", 1L))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void agentCannotAccessAnyAdminUserEndpoint() throws Exception {
         String agentToken = login("agent1", "agent1", "AGENT");
+
         mockMvc.perform(get("/api/admin/users")
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
 
+        mockMvc.perform(get("/api/admin/users/{userId}", 1L)
+                        .header("Authorization", "Bearer " + agentToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/users")
+                        .header("Authorization", "Bearer " + agentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_CREATE_REQUEST))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/users/{userId}", 1L)
+                        .header("Authorization", "Bearer " + agentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_UPDATE_REQUEST))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/users/{userId}", 1L)
+                        .header("Authorization", "Bearer " + agentToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanListUsers() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
+
         mockMvc.perform(get("/api/admin/users")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
@@ -177,6 +238,34 @@ class AdminUserControllerTest {
         assertThat(updated.getEmail()).isEqualTo("after@example.test");
         assertThat(updated.getRole()).isEqualTo(UserRole.ADMIN);
         assertThat(updated.isEnabled()).isFalse();
+    }
+
+    @Test
+    void adminCanPromoteEnabledAgentToAdmin() throws Exception {
+        AppUser agent = saveUser(
+                "promotion-target",
+                "promotion-target@example.test",
+                UserRole.AGENT);
+        String adminToken = login("admin1", "admin1", "ADMIN");
+
+        mockMvc.perform(put("/api/admin/users/{userId}", agent.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "promotion-target@example.test",
+                                  "role": "ADMIN",
+                                  "enabled": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value("promotion-target"))
+                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.enabled").value(true));
+
+        AppUser promoted = users.findById(agent.getId()).orElseThrow();
+        assertThat(promoted.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(promoted.isEnabled()).isTrue();
     }
 
     @Test

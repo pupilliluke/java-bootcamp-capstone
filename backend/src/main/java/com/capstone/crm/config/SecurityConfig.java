@@ -49,7 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/customers/**").hasAnyRole("AGENT", "ADMIN")
                         .requestMatchers("/api/interactions/**").hasAnyRole("AGENT", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .anyRequest().authenticated())
+                        .anyRequest().denyAll())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->
                                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED))
