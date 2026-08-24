@@ -12,4 +12,5 @@ export const customersApi = {
   create(body: CreateCustomer, signal?: AbortSignal): Promise<Customer> {
     return http<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(body) }, signal)
   },
+
 }
