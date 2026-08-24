@@ -20,6 +20,10 @@ dist/
 .env
 .env.*
 !.env.example
+# Belt and braces for local secret directories, in case anyone adds one.
+# Anchored: a bare "secrets/" would match any directory of that name anywhere.
+/secrets/
+/backend/secrets/
 *.pem
 *.key
 *.p12

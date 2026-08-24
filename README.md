@@ -1,18 +1,52 @@
 # Java Bootcamp Capstone CRM
 
-A Spring Boot customer relationship management backend with Kafka messaging for customer interactions.
+A customer relationship management application: a React front end, a Spring Boot
+REST API with JWT authentication, Kafka messaging for customer interactions, and
+PostgreSQL for accounts.
 
 ## Project status
 
 | Area | Current contents |
 | --- | --- |
-| Backend | Spring Boot REST API, in-memory customer storage, Kafka producer and consumer |
+| Front end | React and TypeScript, nine screens behind a login guard |
+| Backend | Spring Boot REST API, JWT authentication and roles, Kafka producer and consumer |
+| Database | PostgreSQL with Flyway. One table so far, `app_user` — customers are still in memory |
 | Kafka messaging | Versioned interaction events, idempotent consumer processing, retry and dead-letter-topic configuration |
-| Tests | Unit tests for publishing and idempotency, plus an embedded Kafka integration test |
-| Frontend | Directory reserved for future work |
-| Docs, defense, reports | Directories reserved for project material |
+| Tests | Unit tests for publishing and idempotency, an embedded Kafka integration test, and one that runs against real PostgreSQL |
+| Docs | Six planning documents in `docs/`, starting with `docs/backlog.md` |
+| Defense, reports | Directories reserved for project material |
+
+**What is not built yet:** customers and interactions are not saved anywhere, so
+both reset on restart. `docs/backlog.md` has the full picture and the plan.
 
 ## Features
+
+### Front end
+
+Everything sits behind a login guard, so signing out unmounts the workspace and
+the customer data loaded with it.
+
+- Sign in, sign out, and a sidebar for moving between screens.
+- Dashboard, customer list with paging, customer details, and an add-customer form.
+- Log an interaction from the customer details screen.
+- Contacts, activities, and reports screens.
+
+Screens navigate through React state rather than a router library, which keeps
+the dependency list to React alone. The trade is that there are no URLs: the
+browser back button does nothing and a refresh returns you to the dashboard.
+
+Two things are deliberately honest rather than finished:
+
+- **Editing a customer is disabled.** The form opens and shows a message
+  explaining that the API has no `PUT /api/customers` yet, and the save button
+  stays greyed out.
+- **Contacts, activities, and reports run on hardcoded data**, because no
+  endpoint serves them. Every panel that does carries a "Demo data" tag so
+  fabricated rows are never mistaken for real ones.
+
+The bearer token is held in memory, not `localStorage`, so a script injected
+into the page cannot read it. The trade is that a refresh signs you out. Any 401
+from the API clears the session and returns to the login screen.
 
 ### Customer API
 
@@ -42,8 +76,84 @@ Customer data is stored in memory and resets when the application restarts.
 
 - Git
 - JDK 21
-- Maven 3.9 or later
+- Node.js 20 or later, for the front end and the setup check
 - Docker Desktop with Docker Compose
+
+Maven is not in the list. Use the `mvnw` wrapper committed in `backend/` — it
+pins the version everyone builds with, so nobody has to match it by hand.
+
+## Quick setup
+
+Seven steps from clone to a working login, plus two more if you want the shared
+Azure database. PowerShell shown; `cmd` differs only at step 2.
+
+### Local (everything on your machine)
+
+1. `git clone <repository-url>` then `cd java-bootcamp-capstone`
+2. `Copy-Item .env.example .env` — `cmd`: `copy .env.example .env`
+3. Open `.env`, set `JWT_SECRET` to any string of 32 characters or more, and set `LOCAL_DB_PASSWORD` to anything
+4. `docker compose up -d` — reads the same `.env` and creates the container with those credentials
+5. `cd backend` then `.\mvnw spring-boot:run` — Flyway builds the schema and seeds the demo accounts
+6. New terminal: `cd frontend` then `npm ci` then `npm run dev`
+7. Open <http://localhost:5173> and sign in as `agent1` / `agent1`
+
+The `local` profile is the default, so nothing needs selecting. `.env` is the
+only file you edit, and both Docker Compose and Spring read it — which is why
+step 3 comes before step 4.
+
+### Azure (optional, shared database)
+
+8. Get the `AZURE_DB_*` values from a teammate out of band and uncomment them in `.env`
+9. Start the backend with the profile: `$env:SPRING_PROFILES_ACTIVE = "azure"` then `.\mvnw spring-boot:run`
+
+Swapping back to local is unsetting the profile. Tests are unaffected either
+way: they run under their own `test` profile on in-memory H2 and never touch
+Azure.
+
+### Ports
+
+| Service | Port | |
+| ------- | ---- | - |
+| Front end, Vite | **5173** | the one you open in a browser |
+| Backend API | 8080 | the front end talks to it; you rarely visit it directly |
+| PostgreSQL | 5432 | started by `docker compose` |
+| Kafka | 9092 | started by `docker compose` |
+
+Postgres and Kafka restart with Docker Desktop, so normally only the backend and
+the front end need starting by hand.
+
+### Verify your setup
+
+With the backend running, from the repository root. Same command on Windows 10, Windows 11 and macOS — it uses Node, which you already have for the front end:
+
+```powershell
+node scripts/verify-setup.mjs
+```
+
+It checks the whole stack and prints a pass/fail table grouped by service: `.env`
+exists and the secret is long enough, which database is configured, whether the
+local container is up, whether the application answers, whether `agent1` can log in, whether the
+datasource is reachable, whether an authenticated read succeeds, and — the one
+people forget — that an anonymous request is still refused with 401. It exits
+non-zero if anything fails, so it also works as a pre-push check.
+
+The "database mode" line reads `.env`, not the running process. If you edit
+`.env` while the backend is up, restart it before trusting that line.
+
+Reading the datasource detail needs a login, because `management.endpoint.health.show-details`
+is `when-authorized` rather than `always`: the health endpoint stays public so a
+container orchestrator can probe it, but an anonymous caller gets only `UP` or
+`DOWN`, never the database vendor, connection state, or disk figures.
+
+### If something fails
+
+| Symptom | Cause |
+| ------- | ----- |
+| `Could not resolve placeholder 'JWT_SECRET'` | `.env` was never copied, or it is not at the repository root |
+| `Connection refused` on 5432 | Docker Desktop is not running, or `docker compose up -d` was skipped |
+| Login returns 401 immediately after startup | the seeder has not finished; retry in a second |
+| Azure connection hangs with no error | blocked by the Azure firewall rules — ask the server owner |
+| `password authentication failed` | wrong password, or extra characters pasted into `.env` |
 
 ## Download the project
 
@@ -58,7 +168,7 @@ Replace `<repository-url>` with the GitHub repository URL.
 
 ## Run locally
 
-Start Docker Desktop first. From the repository root, start Kafka:
+Start Docker Desktop first. From the repository root, start PostgreSQL and Kafka:
 
 ```powershell
 docker compose up -d
@@ -68,22 +178,33 @@ Start the backend in a second terminal:
 
 ```powershell
 cd backend
-mvn spring-boot:run
+.\mvnw spring-boot:run
 ```
 
-The API starts at `http://localhost:8080`. Kafka is available at `localhost:9092`.
-
-To stop the local Kafka container:
+Start the front end in a third:
 
 ```powershell
-cd ..
+cd frontend
+npm run dev
+```
+
+Open <http://localhost:5173>. The API is at `http://localhost:8080`, PostgreSQL
+at `localhost:5432`, and Kafka at `localhost:9092`.
+
+To stop the containers:
+
+```powershell
 docker compose down
 ```
+
+Add `-v` to that only when you want to wipe the database — it deletes the volume,
+so the schema and every row go with it.
 
 ## API endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `POST` | `/api/auth/login` | Exchange a username and password for a bearer token |
 | `GET` | `/api/customers` | List customers |
 | `GET` | `/api/customers/{customerId}` | Get one customer |
 | `POST` | `/api/customers` | Create a customer |
@@ -91,18 +212,22 @@ docker compose down
 
 The interaction endpoint accepts `customerId`, `channel`, and `notes`. It returns `202 Accepted` with the created event.
 
+There is no `PUT` or `DELETE` for customers yet, and no `GET` to list a
+customer's interactions. Those gaps are why the front end disables editing and
+keeps its interaction timeline in local state.
+
 ## Test the project
 
 From the `backend` directory, run unit tests:
 
 ```powershell
-mvn test
+.\mvnw test
 ```
 
 Run the complete verification suite:
 
 ```powershell
-mvn verify
+.\mvnw verify
 ```
 
 `mvn verify` runs the unit tests and the embedded Kafka integration test. The integration test starts its own temporary Kafka broker, so it does not require the Docker Kafka container.
@@ -110,7 +235,7 @@ mvn verify
 For the final pre-push check:
 
 ```powershell
-mvn clean verify
+.\mvnw clean verify
 ```
 
 ## Configuration
@@ -121,31 +246,64 @@ The backend uses `localhost:9092` by default. Override the broker address with t
 
 ```powershell
 $env:KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
-mvn spring-boot:run
+.\mvnw spring-boot:run
 ```
 
 ### JWT secret
 
-`JWT_SECRET` is required and has no default. A fallback committed to the repository would be a weak secret that ships, so the application refuses to start without it:
+Secrets live in a gitignored `.env` at the repository root, never in `application.yml`. Copy the template once and fill it in:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`application.yml` imports it with `optional:file:./.env[.properties],optional:file:../.env[.properties]`, so `mvn spring-boot:run` works with nothing exported, whether you launch from the repository root or from `backend/`. Both paths are listed because the import resolves against the JVM working directory, and a path that misses is skipped silently.
+
+`JWT_SECRET` is required and has no default. A committed fallback would be a weak secret that ships, so a missed import crashes the app at startup rather than quietly running on one:
 
 ```text
 Could not resolve placeholder 'JWT_SECRET' in value "${JWT_SECRET}"
 ```
 
-Set it before running the backend:
+HS256 signs with a 256-bit key, so the value must be at least 32 characters. Any string works, and it does **not** have to match what teammates use — it only has to stay stable for you, or previously issued tokens stop verifying.
 
-```powershell
-$env:JWT_SECRET = "local-dev-secret-at-least-32-bytes-long!"
-mvn spring-boot:run
-```
+Tests need none of this: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with nothing set.
 
-HS256 signs with a 256-bit key, so the value must be at least 32 characters. A shorter one also fails at startup rather than producing weakly signed tokens.
+### Database
 
-Tests do not need it: `src/test/resources/application.properties` supplies a test-only value, so `mvn verify` runs with the variable unset.
+Which database is used is chosen by **Spring profile**, not by editing any file.
+
+| Profile | Database | How to select |
+| ------- | -------- | ------------- |
+| `local` | the docker-compose container | nothing — it is the default |
+| `azure` | the hosted Flexible Server | `SPRING_PROFILES_ACTIVE=azure` |
+| `test` | in-memory H2 | set automatically when tests run |
+
+`application-local.yml` and `application-azure.yml` hold only the *shape* of each
+connection. Every host, name, user and password comes from `.env`, so nothing
+about either database is committed — including the local container's password,
+which Docker Compose reads from the same file.
+
+`sslmode=require` is built into the azure profile rather than left to whoever
+writes `.env`. Azure refuses the connection without it.
+
+Changing `LOCAL_DB_PASSWORD` after the container already exists needs
+`docker compose down -v` first. Postgres only applies `POSTGRES_PASSWORD` when it
+initialises an empty data directory, so editing `.env` alone leaves the old
+password in place and the application then fails to authenticate.
+
+### Deploying
+
+There is no `.env` in a deployed environment. Both imports skip, and the same key names arrive as real environment variables instead — Azure App Service Application Settings, Container Apps secrets, or a Kubernetes Secret. The image is identical on a laptop and in the cloud; only the source of the values changes.
+
+`.env.example` is the committed list of which keys exist. Deploying means copying those keys into the host's settings, never uploading the file.
 
 ### Demo accounts
 
-Authentication uses two in-memory accounts. `POST /api/auth/login` returns a bearer token to send as `Authorization: Bearer <token>`.
+Two accounts are seeded into the `app_user` table on first startup, with BCrypt
+password hashes — they are rows in PostgreSQL, not hardcoded users.
+`POST /api/auth/login` returns a bearer token to send as
+`Authorization: Bearer <token>`.
 
 | Username | Password | Role |
 | -------- | -------- | ---- |
@@ -160,9 +318,22 @@ Authentication uses two in-memory accounts. `POST /api/auth/login` returns a bea
 java-bootcamp-capstone/
 ├── backend/                 Spring Boot application and tests
 ├── frontend/                React + TypeScript application (Vite)
-├── docs/                    Reserved for documentation
+├── scripts/                 verify-setup.mjs, the one-command setup check
+├── docs/                    Planning documents — start with backlog.md
 ├── defense/                 Reserved for defense material
 ├── reports/                 Reserved for reports
-├── docker-compose.yml       Local Kafka service
+├── docker-compose.yml       Local PostgreSQL and Kafka
+├── .env.example             The list of keys .env must define
 └── README.md
 ```
+
+`docs/` holds the planning material:
+
+| File | What it is for |
+| ---- | -------------- |
+| `backlog.md` | What we are building, what exists, the phases, and the split of work |
+| `architecture.md` | How the system fits together today, with diagrams |
+| `lab-coverage.md` | Which course techniques the capstone has actually used |
+| `risk-register.md` | Known risks, who owns them, and what was accepted |
+| `azure-admin-runbook.md` | Operating the hosted database |
+| `azure-authentication.md` | How the Azure connection authenticates |

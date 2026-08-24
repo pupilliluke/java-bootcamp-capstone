@@ -1,30 +1,38 @@
 package com.capstone.crm.security;
 
+import com.capstone.crm.entity.AppUser;
+import com.capstone.crm.repository.AppUserRepository;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-//TODO: replace the two in-memory demo users with a persisted account table.
 @Service
 public class CrmUserDetailsService implements UserDetailsService {
 
-    private final PasswordEncoder encoder;
+    private final AppUserRepository users;
 
-    public CrmUserDetailsService(PasswordEncoder encoder) {
-        this.encoder = encoder;
+    public CrmUserDetailsService(AppUserRepository users) {
+        this.users = users;
     }
 
     @Override
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        if ("agent1".equals(username)) {
-            return User.withUsername("agent1").password(encoder.encode("agent1")).roles("AGENT").build();
-        }
-        if ("admin1".equals(username)) {
-            return User.withUsername("admin1").password(encoder.encode("admin1")).roles("ADMIN").build();
-        }
-        throw new UsernameNotFoundException(username);
+        AppUser user = users.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException(username));
+
+        // A federated account has no hash. Spring's User builder rejects a null
+        // password, so an empty placeholder is used: it can never match a BCrypt
+        // check, which is exactly the desired outcome for a password login.
+        String password = user.getPasswordHash() == null ? "" : user.getPasswordHash();
+
+        return User.withUsername(user.getUsername())
+                .password(password)
+                .roles(user.getRole().name())
+                .disabled(!user.isEnabled())
+                .build();
     }
 }

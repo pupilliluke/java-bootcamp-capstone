@@ -2,6 +2,35 @@ spring:
   application:
     name: crm
 
+  # Which database is used is chosen by profile, not by editing this file.
+  #   local (default) -> the docker-compose container
+  #   azure           -> the hosted server, values supplied by .env
+  profiles:
+    default: local
+
+  # Secrets come from a gitignored .env at the repository root. The [.properties]
+  # hint tells Spring to parse it as a properties file. Both candidate paths are
+  # listed because the import resolves against the JVM working directory, and a
+  # path that misses is skipped silently thanks to optional: — launching from
+  # the repo root uses the first, launching from backend/ uses the second.
+  #
+  # In a deployed environment there is no .env, both imports skip, and the same
+  # variable names arrive as real environment variables instead. The image does
+  # not change between a laptop and Azure.
+  config:
+    import: optional:file:./.env[.properties],optional:file:../.env[.properties]
+
+  jpa:
+    hibernate:
+      # validate, never update: the schema is Flyway's to own. An entity that
+      # drifts from the migration fails at startup instead of silently altering
+      # a table in Azure.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -28,12 +57,28 @@ spring:
 server:
   port: 8080
 
+management:
+  endpoint:
+    health:
+      # when-authorized, not always: the health endpoint is public so the
+      # container orchestrator can probe it, and "always" would hand an
+      # anonymous caller the database vendor, connection state and disk figures.
+      # Signed-in users get the detail, which is what the setup check reads.
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n"
 crm:
   security:
     jwt:
-      # No default on purpose: a committed fallback is a weak secret that ships.
-      # Must be at least 32 characters — HS256 needs a 256-bit key and startup
-      # fails loudly on anything shorter.
+      # No default on purpose: a committed fallback is a weak secret that ships,
+      # so a missed import crashes at startup rather than quietly running on one.
+      # The value comes from .env locally and from an environment variable of the
+      # same name once deployed. Must be at least 32 characters: HS256 needs a
+      # 256-bit key.
       secret: ${JWT_SECRET}
       issuer: capstone-crm
       expiration-minutes: 60
