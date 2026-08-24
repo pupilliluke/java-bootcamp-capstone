@@ -1,0 +1,165 @@
+# Build and test every change, before it reaches develop or main.
+#
+# Shape follows lab 43's crm-ci.yml, adapted to this repository: two modules
+# instead of one, and the wrapper rather than a system Maven so CI builds with
+# the same version the enforcer pins locally.
+#
+# No GitHub secrets are used. The test suite supplies its own JWT secret from
+# src/test/resources/application.properties, and the database below is a
+# throwaway container that exists for the length of one job. Nothing here can
+# leak, because there is nothing here to leak.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+# A second push to the same branch cancels the first. Without this, a busy
+# afternoon queues runs that are already out of date by the time they start.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only by default. The package job needs nothing more, and a workflow that
+# cannot write cannot be turned into one that pushes.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    # AppUserRepositoryIT is gated on a reachable PostgreSQL and skips silently
+    # without one. Providing the service here is what makes it run, so every
+    # pull request validates the migrations against a real server rather than
+    # against H2's emulation of one.
+    services:
+      postgres:
+        # Matches docker-compose.yml. Azure runs 18; the difference has not
+        # mattered yet, and CI should mirror what people run locally.
+        image: postgres:17
+        env:
+          POSTGRES_DB: crm
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: ci-throwaway-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # The same three keys .env supplies locally. They have no defaults on
+    # purpose, so without them the integration test cannot resolve its
+    # datasource and the context fails to start.
+    env:
+      LOCAL_DB_NAME: crm
+      LOCAL_DB_USER: crm
+      LOCAL_DB_PASSWORD: ci-throwaway-password
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      # No -DskipTests. verify runs unit tests, the embedded-Kafka integration
+      # test, and the repository test against the service container above.
+      - name: Verify
+        run: ./mvnw -B -ntp clean verify
+
+      # TODO: the Dependency-Check gate belongs here, as its own issue.
+      # See notes/Week 5/Module 40/lab40-dependency-check-plan.md.
+
+      # if: always() so a failing build still uploads the reports that explain
+      # why. Without it the one run you actually need to read has no evidence.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/target/surefire-reports/**
+            backend/target/failsafe-reports/**
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ci, not install: it installs exactly the lock file and fails if
+      # package.json and the lock have drifted apart.
+      - name: Install
+        run: npm ci
+
+      - name: Types
+        run: npx tsc -b
+
+      # test:ci, not test. Plain `npm test` is vitest in watch mode and would
+      # hang the runner until it timed out.
+      - name: Tests
+        run: npm run test:ci
+
+      # The build is a gate of its own: tsc passes on things vite still refuses
+      # to bundle.
+      - name: Build
+        run: npm run build
+
+  # Lab 43's second idea: build the artifact once, and give it an identity that
+  # can be traced back to the commit it came from. Only on develop and main —
+  # a pull request has nothing worth keeping.
+  package:
+    name: package
+    needs: [backend, frontend]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      # Tests already ran in the backend job. Running them again would not make
+      # the jar any more trustworthy, only slower.
+      - name: Package once
+        run: |
+          ./mvnw -B -ntp -DskipTests package
+          sha256sum target/*.jar > target/SHA256SUMS
+          echo "commit=${GITHUB_SHA}" >> target/SHA256SUMS
+
+      - name: Upload jar and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-api-jar
+          path: |
+            backend/target/*.jar
+            backend/target/SHA256SUMS

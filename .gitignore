@@ -37,6 +37,10 @@ kubeconfig
 *.tfvars
 !*.tfvars.example
 
+# Working notes that are not part of the deliverable. Anything in docs/ itself
+# is shared with the team; this is the scratch space beside it.
+docs/local/
+
 # Logs and OS
 *.log
 .DS_Store
