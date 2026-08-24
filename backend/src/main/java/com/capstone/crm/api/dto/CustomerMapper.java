@@ -16,6 +16,13 @@ public final class CustomerMapper {
         return customer;
     }
 
+    public static void applyUpdate(Customer customer, CustomerUpdateDTO dto) {
+        customer.setFullName(dto.fullName());
+        customer.setEmail(dto.email());
+        customer.setPhone(dto.phone());
+        customer.setStatus(dto.status());
+    }
+
     public static CustomerResponseDTO toResponse(Customer customer) {
         return new CustomerResponseDTO(
                 customer.getCustomerId(),
