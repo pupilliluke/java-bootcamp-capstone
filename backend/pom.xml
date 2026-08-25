@@ -15,6 +15,9 @@
   <name>crm-backend</name>
   <properties>
     <java.version>21</java.version>
+    <!-- Pinned deliberately. An unpinned plugin drifts, and then the same commit
+         scans differently from one week to the next with no diff to explain it. -->
+    <dependency-check.version>10.0.4</dependency-check.version>
   </properties>
   <dependencies>
     <dependency>
@@ -146,4 +149,47 @@
       </plugin>
     </plugins>
   </build>
+
+  <!-- Off by default: a normal `mvnw verify` must not wait on the NVD data set,
+       which is a large download the first time and a network dependency every
+       time. The gate turns it on explicitly:
+
+         ./mvnw -B -ntp -Psecurity-scan dependency-check:check
+  -->
+  <profiles>
+    <profile>
+      <id>security-scan</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>${dependency-check.version}</version>
+            <configuration>
+              <formats>
+                <format>HTML</format>
+                <format>JSON</format>
+              </formats>
+              <!-- CVSS 7.0 and above is High. Failing on anything lower would
+                   stop every build on advisories nobody is going to action this
+                   week; failing on nothing at all makes the gate decorative. -->
+              <failBuildOnCVSS>7</failBuildOnCVSS>
+              <!-- Read from the environment rather than a <nvdApiKey> element.
+                   The plugin only consults this when nvdApiKey is null, so
+                   setting both would silently disable it - and passing the key
+                   with -D puts it in the process list on a shared runner. -->
+              <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+              <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+              <outputDirectory>${project.basedir}/../reports</outputDirectory>
+            </configuration>
+            <executions>
+              <execution>
+                <goals><goal>check</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

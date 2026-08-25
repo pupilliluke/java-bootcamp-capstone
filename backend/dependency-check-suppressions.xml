@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Suppression policy. Every <suppress> element must carry all three of:
+
+    - the CVE it suppresses, by id. Never a bare path or package glob, which
+      would also hide findings nobody has looked at yet, including ones that
+      appear months later in the same dependency.
+    - an owner, named. "The team" is nobody, and an unowned suppression is how a
+      known vulnerability quietly becomes permanent.
+    - an expiry, via the until= attribute. The finding reopens on that date if
+      nothing was done, which is the difference between accepting a risk and
+      forgetting it.
+
+  A suppression missing any of the three does not belong here. Empty is the
+  correct state until a finding has been triaged and the reasoning written down
+  in the security assessment.
+
+  Add an entry only after deciding, in writing, why the finding does not apply
+  to this application - not because a build went red on a Friday.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>

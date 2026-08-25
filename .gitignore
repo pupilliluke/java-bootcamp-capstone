@@ -41,6 +41,12 @@ kubeconfig
 # is shared with the team; this is the scratch space beside it.
 docs/local/
 
+# Dependency-Check writes its HTML and JSON reports here. They are evidence, not
+# source: regenerate them from a scan rather than committing a snapshot that
+# stops matching the dependencies the moment anyone edits the pom.
+/reports/*
+!/reports/.gitkeep
+
 # Logs and OS
 *.log
 .DS_Store
