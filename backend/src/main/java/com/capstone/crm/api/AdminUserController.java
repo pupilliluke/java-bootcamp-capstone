@@ -29,9 +29,26 @@ public class AdminUserController {
         return ResponseEntity.ok(userService.list());
     }
 
+    // Declared before the /{userId} mapping so "pending" is not swallowed as an
+    // id — that would fail type conversion rather than reaching this method.
+    @GetMapping("/pending")
+    public ResponseEntity<List<UserResponse>> listPending() {
+        return ResponseEntity.ok(userService.listPending());
+    }
+
     @GetMapping("/{userId}")
     public ResponseEntity<UserResponse> get(@PathVariable Long userId) {
         return ResponseEntity.ok(userService.get(userId));
+    }
+
+    /**
+     * Approves a pending account (issue #16). PATCH rather than PUT: it changes
+     * one flag and needs no body, where the full update contract requires email,
+     * role and enabled together.
+     */
+    @PatchMapping("/{userId}/enable")
+    public ResponseEntity<UserResponse> enable(@PathVariable Long userId) {
+        return ResponseEntity.ok(userService.enable(userId));
     }
 
     @PostMapping

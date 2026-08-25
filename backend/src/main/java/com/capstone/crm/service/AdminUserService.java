@@ -42,6 +42,32 @@ public class AdminUserService {
         return toResponse(user);
     }
 
+    /**
+     * Accounts awaiting approval — the self-registered ones that cannot sign in
+     * yet. Oldest first so the queue is worked in the order people joined it.
+     */
+    @Transactional(readOnly = true)
+    public List<UserResponse> listPending() {
+        return userRepository.findByEnabledFalseOrderByCreatedAtAsc().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /**
+     * Approves a pending account. Idempotent: enabling an already-enabled user
+     * is a no-op that still returns the account, so a double-clicked Approve
+     * button cannot turn into an error.
+     */
+    @Transactional
+    public UserResponse enable(Long userId) {
+        AppUser user = findUser(userId);
+        if (!user.isEnabled()) {
+            user.setEnabled(true);
+            user = userRepository.save(user);
+        }
+        return toResponse(user);
+    }
+
     @Transactional
     public UserResponse create(CreateUserRequest request) {
         String username = request.username().trim();

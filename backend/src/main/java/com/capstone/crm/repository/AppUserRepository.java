@@ -4,6 +4,7 @@ import com.capstone.crm.entity.AppUser;
 import com.capstone.crm.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface AppUserRepository extends JpaRepository<AppUser, Long> {
@@ -17,6 +18,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);
 
     long countByRoleAndEnabledTrue(UserRole role);
+
+    // The approval queue: self-registered accounts start disabled, oldest first.
+    List<AppUser> findByEnabledFalseOrderByCreatedAtAsc();
 
     // Google sign-in resolves an account by the verified email on the ID token.
     Optional<AppUser> findByEmailIgnoreCase(String email);
