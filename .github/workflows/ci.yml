@@ -441,12 +441,99 @@ jobs:
           kubectl -n crm logs -l app=crm-api --tail=200 --all-containers || true
           kubectl -n crm get events --sort-by=.lastTimestamp | tail -40 || true
 
+  e2e:
+    name: end-to-end journey
+    needs: [ backend, frontend ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Services belong to this job. Services from the backend job cannot be
+    # shared because every GitHub Actions job runs on a separate runner.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: crm
+          POSTGRES_USER: crm
+          POSTGRES_PASSWORD: ci-e2e-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm -d crm"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      kafka:
+        image: apache/kafka:4.3.1
+        ports:
+          - 9092:9092
+        options: >-
+          --health-cmd "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-start-period 20s
+          --health-retries 12
+
+    env:
+      LOCAL_DB_HOST: localhost
+      LOCAL_DB_PORT: 5432
+      LOCAL_DB_NAME: crm
+      LOCAL_DB_USER: crm
+      LOCAL_DB_PASSWORD: ci-e2e-password
+      KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+
+      # CI-only value—not a deployed or shared secret.
+      JWT_SECRET: ci-e2e-secret-that-is-at-least-32-bytes-long
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # playwright.config.ts starts Spring Boot and Vite and waits for their
+      # readiness URLs before launching Chromium.
+      - name: Run customer journey
+        run: npm run test:e2e
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-e2e-report
+          path: |
+            frontend/playwright-report/**
+            frontend/test-results/**
+          if-no-files-found: warn
+          retention-days: 14
+
   # Lab 43's second idea: build the artifact once, and give it an identity that
   # can be traced back to the commit it came from. Only on develop and main —
   # a pull request has nothing worth keeping.
   package:
     name: package
-    needs: [backend, frontend]
+    needs: [backend, frontend, e2e]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     defaults:

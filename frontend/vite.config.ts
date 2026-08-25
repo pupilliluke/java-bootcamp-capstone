@@ -14,6 +14,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Browser journeys are owned by Playwright under e2e/. Keep Vitest focused
+    // on the component and API unit tests that live beside the source files.
+    include: ['src/**/*.test.{ts,tsx}'],
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
