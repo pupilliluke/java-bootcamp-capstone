@@ -8,7 +8,7 @@
 # The password is a literal because there is nothing to protect -- this database
 # holds two seeded demo customers and lives for ninety seconds. Every real
 # deployment takes its password from a Secret created out of band; see
-# k8s/secret.example.yaml.
+# k8s/examples/secret.example.yaml.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
