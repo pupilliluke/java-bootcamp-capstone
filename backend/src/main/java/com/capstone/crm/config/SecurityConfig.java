@@ -46,6 +46,11 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health", "/actuator/health/readiness",
                                 "/actuator/health/liveness").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Deleting a customer is the one customer operation an agent
+                        // cannot do. Listed before the general rule because matchers
+                        // are evaluated in order and the first match wins — put this
+                        // after it and hasAnyRole would already have allowed it.
+                        .requestMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
                         .requestMatchers("/api/customers/**").hasAnyRole("AGENT", "ADMIN")
                         .requestMatchers("/api/interactions/**").hasAnyRole("AGENT", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
