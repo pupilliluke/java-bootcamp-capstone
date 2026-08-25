@@ -39,7 +39,10 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/login", "/error").permitAll()
+                        // Sign-up is public by design. It can only ever create a
+                        // disabled AGENT, so an anonymous caller gains an account
+                        // that still cannot authenticate until an admin enables it.
+                        .requestMatchers("/api/auth/login", "/api/auth/register", "/error").permitAll()
                         // "/actuator/health" is an exact match, not a prefix, so the
                         // probes need naming. Listing them keeps the grant narrow:
                         // component detail stays authenticated.

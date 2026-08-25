@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-api
+  namespace: crm
+  labels:
+    app: crm-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crm-api
+  template:
+    metadata:
+      labels:
+        app: crm-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: crm-api
+          # A tag here, and a digest recorded in docs/rollback-runbook.md. That
+          # split is deliberate rather than a shortcut.
+          #
+          # A tag is a mutable pointer: rebuild it and this Deployment silently
+          # means different software, with no diff to explain it. What makes a
+          # rollback possible is not the manifest holding a digest, it is the
+          # digest of the thing that was tested being written down before it
+          # ships -- "redeploy the previous digest" only works if somebody
+          # recorded it. Capture happens on every build, not when something
+          # breaks.
+          #
+          # The tag scheme is three tags on one build: crm-api:dev for a human to
+          # type, crm-api:0.0.1-SNAPSHOT matching the Maven version, and
+          # crm-api:<git-sha> tying the image to its commit.
+          #
+          # backend/Dockerfile pins its FROM lines by digest for exactly this
+          # reason, one level up: a base image tag is republished whenever the
+          # JDK or the Ubuntu beneath it rebuilds. Same principle, same argument
+          # as pinning the Dependency-Check plugin version -- name the content,
+          # not a label somebody can repoint.
+          #
+          # It applies here too, and will, once images are pushed: a promotion
+          # between environments should deploy the digest that was tested, not a
+          # tag that happens to point there today. Two things stop it right now.
+          # Nothing is pushed to a registry, so there is no repo digest to name.
+          # And k3d imports into containerd, which computes its own image ID --
+          # verified rather than assumed: docker reports sha256:ebfe1486... for
+          # the build the pod is running, while the pod reports sha256:628d95bd...
+          # Same bits, different string, so the two cannot be compared directly.
+          #
+          # For k3d the image has to be inside the cluster first:
+          #   k3d image import crm-api:dev -c <cluster>
+          image: crm-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: crm-api-config
+            - secretRef:
+                name: crm-api-secrets
+              # Create that Secret out-of-band (GUIDE Step 2). Never apply secret.example.yaml.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # Three probes, each answering a different question.
+          #
+          # Startup uses readiness because Flyway runs before the app can serve,
+          # and 30 x 5s gives it 150 seconds before anything gives up. Liveness
+          # deliberately does NOT point at readiness: a database blip should take
+          # the pod out of rotation, not restart a process that is working fine.
+          #
+          # These probes are only as honest as the health groups behind them, and
+          # the split above depends on one specific grouping in application.yml:
+          #
+          #   management.endpoint.health.group.readiness.include: readinessState,db
+          #
+          # with db deliberately absent from liveness. That is what makes a pod
+          # which cannot reach PostgreSQL leave the Service without being
+          # restarted -- restarting an application does not repair a database.
+          #
+          # Without it readiness falls back to readinessState alone, a flag
+          # meaning only "Spring finished starting", and Kubernetes will happily
+          # route traffic to a pod that cannot serve a single request. The probe
+          # would still go green, which is the worst version of wrong.
+          #
+          # timeoutSeconds is set on all three rather than left to default, and
+          # the default is the reason: it is 1 second, which almost nobody
+          # remembers and which is shorter than this application answers under
+          # load.
+          #
+          # The number interacts with the datasource. With PostgreSQL gone the
+          # readiness endpoint takes about as long as Hikari's connection-timeout
+          # to answer 503 -- ten seconds, per spring.datasource.hikari in
+          # application.yml. A 3-second probe timeout therefore fails on the
+          # deadline rather than on the 503, and the pod leaves the Service in
+          # roughly 30 seconds (3 failures x 10s) instead of 90.
+          #
+          # The cost is the message: `kubectl describe pod` reports "context
+          # deadline exceeded" rather than "statuscode: 503", which is less
+          # informative. Raising the timeout above 10s would surface the real
+          # status, at the price of holding a connection open for the full ten
+          # seconds on every probe while the database is down. Shedding traffic
+          # quickly matters more than the wording of the failure.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Liveness reads the livenessState group, which deliberately excludes
+          # db, so it answers immediately whatever the database is doing. That is
+          # the whole point of the split: a dead database must not restart a
+          # process that is working perfectly well.
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]

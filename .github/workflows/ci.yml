@@ -126,6 +126,321 @@ jobs:
       - name: Build
         run: npm run build
 
+  # The container image, tested in four layers before it is allowed anywhere.
+  # Each answers a question the others cannot, and they are ordered cheapest
+  # first so an obvious mistake fails in seconds rather than after a build:
+  #
+  #   hadolint                  is the Dockerfile written correctly?
+  #   container-structure-test  is the built image the right shape?
+  #   trivy                     does it ship known vulnerabilities or secrets?
+  #   ContainerImageIT          does the application in it actually work?
+  #
+  # On pull requests as well as pushes. A gate that only runs after merge is a
+  # report, not a gate.
+  image:
+    name: image
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Before the build, not after: a Dockerfile problem should not cost the
+      # several minutes it takes to compile the application first.
+      - name: Lint the Dockerfile
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: backend/Dockerfile
+          failure-threshold: warning
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      # buildx, for one reason: a layer cache that survives between runs. A
+      # plain `docker build` on a fresh runner has nothing cached, so it
+      # re-resolves the whole Maven dependency tree and repackages on every
+      # pull request -- around five minutes each time, for a jar that usually
+      # differs by a few classes.
+      - uses: docker/setup-buildx-action@v4.3.0
+
+      # GIT_SHA is a build argument because .dockerignore excludes .git/, so
+      # nothing inside the build can read the commit for itself.
+      #
+      # load: true puts the built image into the runner's Docker daemon. Without
+      # it the result stays inside buildx and the three steps below -- which all
+      # address it as crm-api:test through the daemon -- find no such image.
+      #
+      # mode=max, not the default min: min caches only the final stage, and in a
+      # multi-stage build that is the thin runtime layer. The expensive layer is
+      # dependency:go-offline in the build stage, which min throws away, which
+      # would leave the cache technically working and practically useless.
+      #
+      # Worth knowing: the GitHub Actions cache holds 10 GB per repository and
+      # evicts anything unread for 7 days. If the image job starts feeling slow
+      # again after a quiet fortnight, this is why, and it is self-correcting.
+      - name: Build the image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: backend
+          load: true
+          tags: crm-api:test
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Everything decidable from the image without running it: the user it runs
+      # as, the labels, that the JDK and the sources stayed in the build stage,
+      # and that no credential rode along in a layer.
+      - name: Structure tests
+        run: |
+          curl -fsSL -o container-structure-test \
+            https://storage.googleapis.com/container-structure-test/latest/container-structure-test-linux-amd64
+          chmod +x container-structure-test
+          ./container-structure-test test \
+            --image crm-api:test --config backend/container-structure-test.yaml
+
+      # REPORT-ONLY FOR NOW (exit-code 0). Read this before changing it.
+      #
+      # The image currently carries 8 critical and 41 high findings, nearly all
+      # of them from the application's own dependencies rather than the base
+      # image: tomcat-embed-core 10.1.31 alone accounts for 5 critical and 14
+      # high, and spring-security-web 6.3.4 for another critical. They have
+      # fixes available, so ignore-unfixed does not filter them out.
+      #
+      # Set exit-code to 1 and this job fails on every pull request from the
+      # moment it merges, for everyone, over problems no individual pull request
+      # introduced. A gate that is red on the day it lands is a gate the team
+      # learns to ignore, so it starts as a report and becomes a gate once the
+      # findings are dealt with.
+      #
+      # The fix is one line: the spring-boot-starter-parent version in
+      # backend/pom.xml is 3.3.5, from October 2024. Bumping it pulls patched
+      # Tomcat and Spring Security in transitively. Do that first, confirm this
+      # step reports clean, then change exit-code to "1" and delete this comment.
+      #
+      # Locally, `docker scout quickview crm-api:test` answers the same question
+      # in seconds and needs no database download, which on a home connection is
+      # the difference between a usable check and a forty-minute one. Trivy runs
+      # here because the action caches its database between runs and because it
+      # also sweeps for committed secrets.
+      - name: Vulnerability and secret scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: crm-api:test
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      # Last, because it is the slowest: starts the real image against a real
+      # PostgreSQL and talks to it over HTTP. Testcontainers brings its own
+      # database, so no service block is needed here.
+      #
+      # The failsafe goals directly rather than `verify`, and it.test naming the
+      # one class. `verify` would re-run every unit test and both other
+      # integration tests, all of which the backend job has already run on this
+      # same commit -- roughly two minutes added to every pull request for a
+      # second opinion nobody asked for.
+      - name: Container tests
+        working-directory: backend
+        run: >-
+          ./mvnw -B -ntp test-compile
+          failsafe:integration-test failsafe:verify
+          -Pimage-tests -Dit.test=ContainerImageIT
+
+      - name: Upload container test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image-test-reports
+          path: backend/target/failsafe-reports/**
+
+  # Schema-validates k8s/ against the Kubernetes API. No cluster involved, which
+  # is the point -- YAML parsing proves a file is well formed, not that the
+  # fields exist. A misspelled probe field or an apiVersion removed two releases
+  # ago parses perfectly and fails at `kubectl apply`, which during a demo means
+  # in front of people.
+  #
+  # Verified failable rather than assumed: renaming failureThreshold to
+  # failureThresold gave "additional properties 'failureThresold' not allowed"
+  # and exit 1; downgrading the Ingress to networking.k8s.io/v1beta1 gave "could
+  # not find schema for Ingress" and exit 1.
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the version the k3d cluster actually runs, so a field valid on
+      # a newer API but absent here is caught rather than waved through.
+      # -strict rejects unknown fields; without it a typo is silently ignored.
+      # The count guard is the part that makes this a check rather than a
+      # formality. kubeconform exits 0 on an empty directory -- "0 resources
+      # found ... Errors: 0" -- so a renamed folder or a wrong path would go
+      # green having validated nothing. Verified: an empty directory passes on
+      # its own, and fails with the guard.
+      #
+      # -verbose names each file in the log, so the run is its own evidence
+      # rather than a single summary line nobody can check.
+      - name: Validate the Kubernetes manifests
+        run: |
+          # Required, and not decoration. GitHub's default shell is `bash -e {0}`
+          # WITHOUT pipefail -- only an explicit `shell: bash` adds it. kubeconform
+          # is piped into tee below so the report can be uploaded as an artifact,
+          # and without this line the step's exit status is tee's, which is always
+          # 0. Verified against kubeconform v0.8.0 and a real broken manifest:
+          # renaming failureThreshold to failureThresold exits 1 unpiped, exits 0
+          # through the pipe, and exits 1 again with this line present. The
+          # file-count guard below does not compensate -- kubeconform prints the
+          # same "in 7 files" summary whether resources are valid or invalid.
+          set -o pipefail
+
+          expected=$(find k8s -name '*.yaml' -type f | wc -l | tr -d ' ')
+          if [ "$expected" -eq 0 ]; then
+            echo "No manifests found in k8s/ - nothing was validated."
+            exit 1
+          fi
+          echo "Validating $expected manifest(s)"
+
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz             | tar -xz kubeconform
+
+          ./kubeconform -strict -summary -verbose             -kubernetes-version 1.35.5 k8s/ | tee kubeconform.txt
+
+          grep -q "in $expected file" kubeconform.txt || {
+            echo "kubeconform validated a different number of files than the $expected present."
+            exit 1
+          }
+
+      - name: Upload the validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeconform-report
+          path: kubeconform.txt
+
+  # Deploys the manifests to a real cluster, proves the application serves, breaks
+  # the deployment on purpose and proves it recovers.
+  #
+  # The manifests job answers "are these legal Kubernetes resources". This one
+  # answers the question that actually matters: does the thing they describe
+  # work. A schema check would pass a Deployment that points at an image which
+  # does not exist, names a Secret key nothing provides, or probes a path that
+  # returns 404.
+  #
+  # Runs after image, so a cluster is only spun up for an image that already
+  # passed hadolint, the structure tests and its own integration suite.
+  cluster:
+    name: cluster
+    needs: [backend, frontend, image]
+    runs-on: ubuntu-latest
+    # Bounded deliberately: a cluster that never converges would otherwise hold a
+    # runner for the six-hour default. A full local run is about four minutes.
+    #
+    # 30 rather than 20, because smoke.sh's own waits can legitimately add up past
+    # 20 on a bad run -- 420s for the postgres pull, 300s for the rollout, 60s for
+    # the deliberate break, 300s for the rollback -- on top of a cold docker build.
+    # The job timeout should be the backstop that catches a hang, not the thing
+    # that fires first on a merely slow run.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rebuilt rather than carried from the image job, because jobs do not share
+      # a Docker daemon. Through buildx with the same type=gha cache the image job
+      # writes, so the rebuild reuses those layers instead of starting cold.
+      #
+      # It used to be a plain `docker build` under a comment claiming the layer
+      # cache made it cheap. That was false: without buildx there is no gha cache
+      # and every run was a full multi-stage Maven build.
+      #
+      # GIT_SHA matters -- the structure tests reject an image whose revision
+      # label says "unknown".
+      - uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Build the image
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: backend
+          load: true
+          tags: crm-api:dev
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # k3d rather than kind, because it is what the team runs locally. The
+      # rehearsal in docs/rollback-runbook.md and this job are then evidence
+      # about the same thing rather than two similar ones.
+      # k3d is installed directly rather than through AbsaOSS/k3d-action. That
+      # action hardcodes k3d v5.4.6 and its installer now 404s -- observed on
+      # run 32898474495, which failed before a cluster ever existed. Pinning the
+      # version here also means CI runs the same k3d as a laptop, so the
+      # rehearsal recorded in docs/rollback-runbook.md and this job are evidence
+      # about the same thing rather than two similar ones.
+      - name: Install k3d
+        run: |
+          # pipefail matters here for the same reason it does in the manifests
+          # job. Piping curl into bash under the default `bash -e {0}` hides
+          # curl's exit code, and a failed download feeds bash an empty script
+          # which exits 0 -- a silently skipped install, not a failed one.
+          set -o pipefail
+          curl -sfL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.9.0 bash
+
+          # The install is only real if the binary runs.
+          k3d version
+
+      # The same flags as the create command in docs/rollback-runbook.md.
+      #
+      # --image is not optional: k3d's built-in default k3s moves with every k3d
+      # release, and a cluster on a different one is not the cluster the
+      # manifests job validates against.
+      - name: Create the cluster
+        run: |
+          k3d cluster create ci --agents 0 \
+            -p "8088:80@loadbalancer" \
+            --api-port 127.0.0.1:6445 \
+            --image rancher/k3s:v1.35.5-k3s1
+          kubectl version
+          kubectl get nodes
+
+      # k3d runs its own containerd; an image in the runner's Docker daemon is
+      # not visible to it. Without this the pod sits in ErrImagePull.
+      - name: Load the image into the cluster
+        run: |
+          k3d image import crm-api:dev -c ci
+          # Verified rather than assumed. k3d image import can exit 0 having
+          # imported nothing -- observed locally, where the pod then spent ten
+          # minutes in ContainerCreating pulling from Docker Hub instead. grep
+          # fails the step if the image is not actually in the cluster.
+          docker exec k3d-ci-server-0 crictl images | grep crm-api
+
+      # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on
+      # Windows, where git does not reliably carry the executable bit, and a
+      # missing +x would fail this job with "permission denied" for a reason that
+      # has nothing to do with the manifests.
+      - name: Deploy, smoke, break, recover
+        run: bash k8s/smoke.sh
+
+      # Only on failure, and worth the noise then: a red cluster job with no
+      # cluster left to inspect is nearly impossible to diagnose from a runner
+      # that has already been destroyed.
+      # failure() || cancelled(), not failure() alone. Exceeding timeout-minutes
+      # CANCELS a job rather than failing it, so `if: failure()` would skip this
+      # step in exactly the case where the cluster state is most needed and the
+      # runner is about to be destroyed with it.
+      - name: Diagnostics
+        if: ${{ failure() || cancelled() }}
+        run: |
+          kubectl -n crm get all -o wide || true
+          kubectl -n crm describe pods || true
+          kubectl -n crm logs -l app=crm-api --tail=200 --all-containers || true
+          kubectl -n crm get events --sort-by=.lastTimestamp | tail -40 || true
+
   e2e:
     name: end-to-end journey
     needs: [ backend, frontend ]
@@ -212,7 +527,6 @@ jobs:
             frontend/test-results/**
           if-no-files-found: warn
           retention-days: 14
-
 
   # Lab 43's second idea: build the artifact once, and give it an identity that
   # can be traced back to the commit it came from. Only on develop and main —

@@ -42,13 +42,31 @@ public class AppUser {
 
     protected AppUser() {}
 
-    public AppUser(String username, String email, String passwordHash, UserRole role) {
+    private AppUser(String username, String email, String passwordHash, UserRole role,
+                    boolean enabled) {
         this.username = username;
         this.email = email;
         this.passwordHash = passwordHash;
         this.role = role;
-        this.enabled = true;
+        this.enabled = enabled;
         this.createdAt = Instant.now();
+    }
+
+    /**
+     * Self-service sign-up. Role and enabled are decided here rather than passed
+     * in, so the caller cannot choose either and nobody downstream has to
+     * remember a setter. Every other construction path defaults to enabled, and
+     * an account meant to await approval that shipped live would look identical
+     * at the call site.
+     */
+    public static AppUser pendingApproval(String username, String email, String passwordHash) {
+        return new AppUser(username, email, passwordHash, UserRole.AGENT, false);
+    }
+
+    /** Administratively created accounts are live immediately: the admin who
+     *  typed the details has already made the trust decision. */
+    public AppUser(String username, String email, String passwordHash, UserRole role) {
+        this(username, email, passwordHash, role, true);
     }
 
     public Long getId() { return id; }

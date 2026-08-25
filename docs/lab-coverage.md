@@ -11,8 +11,8 @@ at the defense asks "did you use what you learned?"
 **Key:** `[x]` done · `[~]` partly done · `[ ]` not yet · **(stretch)** unlikely
 in six weeks, and fine to skip
 
-**Where we are: 51 done, 12 partly done, 42 to go, across 53 labs.** Nine of the
-remaining are marked stretch, so the realistic target is closer to 96 than 105.
+**Where we are: 55 done, 13 partly done, 38 to go, across 53 labs.** Nine of the
+remaining are marked stretch, so the realistic target is closer to 96 than 106.
 Most of what is left sits in Week 5 — containers, pipeline, Kubernetes — which is
 one person's lane and largely independent of the rest.
 
@@ -66,7 +66,8 @@ one person's lane and largely independent of the rest.
 
 ### Lab 10 — Copilot fundamentals
 - [x] AI assistance for boilerplate
-- [ ] Note in the defense where AI helped and where we rejected its output
+- [x] Note in the defense where AI helped and where we rejected its output —
+      defense/ai-assistance.md, from the container work
 
 ### Lab 11 — Copilot for testing and refactoring
 - [x] AI-assisted test writing
@@ -196,12 +197,19 @@ one person's lane and largely independent of the rest.
 ## Week 5 — DevOps, CI/CD and Kubernetes
 
 ### Lab 40 — Application security testing
-- [ ] Dependency-Check run, findings triaged
-- [ ] Fix or accept each finding, with an owner and a date
+- [~] A scanner runs in CI — Trivy over the image, on every pull request. It is
+      report-only, and it is not Dependency-Check
+- [ ] Fix or accept each finding, with an owner and a date — 8 critical and 41
+      high are outstanding, nearly all from spring-boot-parent 3.3.5 being a
+      year and a half old. Bumping it is the fix; until then the gate cannot
+      be turned on
 
 ### Lab 41 — Containerise the Spring Boot app
-- [ ] Multi-stage Dockerfile producing a small image
-- [ ] Runs as a non-root user, with a pinned digest rather than a tag
+- [x] Multi-stage Dockerfile producing a small image
+- [x] Runs as a non-root user, with a pinned digest rather than a tag
+- [x] Four layers of checks on the image: hadolint, container-structure-test,
+      a vulnerability scan, and ContainerImageIT starting it against real
+      PostgreSQL — see backend/container-structure-test.yaml and the image job
 
 ### Lab 42 — Kubernetes on k3s
 - [ ] Deployment, Service, ConfigMap, Secret and Ingress
