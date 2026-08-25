@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crm-api
+  namespace: crm
+  labels:
+    app: crm-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: crm-api.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: crm-api
+                port:
+                  number: 80
+  # localtest.me resolves to 127.0.0.1 from anywhere, so this needs no hosts
+  # file edit on any of the four machines. TLS is out of scope locally; the
+  # smoke check uses plain HTTP against the k3d load balancer port.
