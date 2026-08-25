@@ -20,7 +20,20 @@ export async function http<T>(
 
   const headers = new Headers(init.headers)
   if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-  if (!headers.has('X-Correlation-ID')) headers.set('X-Correlation-ID', 'lab-request-001')
+  // A fresh id per request. This was a fixed string carried over from a lab
+  // fixture, which meant every request from every user shared one id and the
+  // backend's CorrelationIdFilter — which honours a caller-supplied value —
+  // stamped all of them the same. That made the logs untraceable.
+  //
+  // randomUUID needs a secure context: localhost and https qualify, plain http
+  // on a remote host does not, hence the fallback.
+  if (!headers.has('X-Correlation-ID')) {
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    headers.set('X-Correlation-ID', id)
+  }
 
   // Only relative paths carry the token. An absolute URL points somewhere we do
   // not control, and a bearer token must never be sent there.
