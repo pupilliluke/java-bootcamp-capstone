@@ -18,6 +18,14 @@ reports/
 *.log
 dependency-check-suppressions.xml
 
+# Test sources. The image build never runs them -- the Dockerfile packages with
+# maven.test.skip and CI runs the full verify outside the image -- so they are
+# dead weight in the context. Excluding them is not about the few hundred KB: it
+# is about the build cache. src/ is one COPY, so without this line editing any
+# test invalidates that layer and every layer after it, and adding one test file
+# costs a full dependency resolution and repackage, which is ten minutes.
+src/test/
+
 # Editor and OS noise.
 .idea/
 .vscode/

@@ -7,7 +7,18 @@
 #
 # See .dockerignore beside this file for what is kept out of that context.
 
-FROM eclipse-temurin:21-jdk AS build
+# Pinned by digest, not by tag. eclipse-temurin:21-jdk is a moving target -- the
+# same tag is republished whenever the JDK or the Ubuntu base beneath it is
+# rebuilt, so "the image CI built last week" is not an image anyone can get back.
+# A digest is the one identifier that means exactly these bytes.
+#
+# The tag is kept in front of the digest for readability only; Docker resolves
+# the digest and ignores it. Bumping either one is a deliberate commit, which is
+# the point: the base image changes when someone decides it should, and the diff
+# says so.
+#
+#   docker buildx imagetools inspect eclipse-temurin:21-jdk   # to find a newer one
+FROM eclipse-temurin:21-jdk@sha256:85f00967bcc624fc19fa9c2cf124ea426a5363898e267141726f31f358c2e14b AS build
 WORKDIR /workspace
 
 # The committed wrapper rather than a maven: base image. The wrapper pins the
@@ -31,9 +42,18 @@ COPY src ./src
 # no route to either. That is not the same as untested: CI runs the full
 # `mvnw clean verify` outside the image with the service container up, and the
 # image is only built after that job passes.
-RUN ./mvnw -B -ntp -DskipTests package
+#
+# maven.test.skip, not skipTests. skipTests skips running the tests but still
+# compiles them, which means the build resolves every test-scoped dependency and
+# javac's a source tree whose output is then discarded. .dockerignore excludes
+# src/test for the same reason, so there is nothing here to compile anyway.
+RUN ./mvnw -B -ntp -Dmaven.test.skip=true package
 
-FROM eclipse-temurin:21-jre
+# Pinned by digest for the same reason as the build stage, and it matters more
+# here: this is the layer that actually ships. A rebuilt tag is how an image
+# that passed the vulnerability scan on Tuesday fails it on Thursday having
+# changed nothing, and how two people debugging "the same image" are not.
+FROM eclipse-temurin:21-jre@sha256:7a65df4b22d2de92d4e04056e884f3b9122d70b21e2847fd66084278bd0ce037
 
 # Non-root. UID 10001 sits above the host system-account range, so it cannot
 # collide with a real account if a volume is ever shared into the container.
@@ -63,15 +83,24 @@ ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 #
 # In Kubernetes the same names arrive from a ConfigMap and a Secret instead.
 
-# /dev/tcp rather than curl or wget: it is a bash builtin, so the runtime image
-# needs no extra package -- and every package added is another artifact for the
-# Dependency-Check scan to find. start-period covers Flyway plus context startup,
-# which is roughly 10-24 seconds on this application.
+# /dev/tcp rather than curl: it is a bash builtin, so the probe depends on
+# nothing that a future base image could drop. Not, as this comment used to
+# claim, because curl would need installing -- eclipse-temurin:21-jre already
+# ships it at /usr/bin/curl. The builtin is still the better choice, but the
+# reason is portability across base images, not image size.
 #
-# Worth knowing: /actuator/health/readiness currently reports UP even when
-# PostgreSQL is unreachable, because the readiness group contains only
-# readinessState. Until that group also includes db, this healthcheck proves the
-# process is answering rather than that it can serve.
+# start-period covers Flyway plus context startup, which is roughly 10-24
+# seconds on this application.
+#
+# The readiness group includes db, so this proves the container can reach its
+# database and not merely that the process is answering. That is a deliberate
+# choice about what "healthy" should mean here: a container that cannot serve a
+# request should not claim it can.
+#
+# The consequence is worth knowing. Kill the database under a running container
+# and it goes unhealthy within a couple of intervals, which is the point, but it
+# means an unhealthy container is not always a broken image -- check what it
+# depends on before assuming the build is at fault.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=45s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && cat <&3 | grep -q UP"]
 

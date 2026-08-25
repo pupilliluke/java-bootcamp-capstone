@@ -1,0 +1,202 @@
+# Structure tests for the image backend/Dockerfile produces.
+#
+#   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+#     -v "$PWD/backend/container-structure-test.yaml:/test.yaml" \
+#     gcr.io/gcp-runtimes/container-structure-test:latest \
+#     test --image crm-api:test --config /test.yaml
+#
+# container-structure-test rather than a shell script of docker inspect calls,
+# because this is the layer the tool exists for: assertions about what is inside
+# a built image and what its config says. Declarative, so a reviewer reads the
+# promises rather than the plumbing that checks them, and the same file runs
+# unchanged on a laptop and on a CI runner.
+#
+# What belongs here is everything decidable from the image alone. Whether the
+# application actually boots, migrates and serves is a different question with a
+# different tool -- see ContainerImageIT, which starts the image against a real
+# PostgreSQL. Neither replaces the other: this file would pass on an image whose
+# jar cannot start, and the IT would pass on an image that ships a compiler and
+# runs as root.
+schemaVersion: '2.0.0'
+
+# --------------------------------------------------------------------------
+# Config the orchestrator reads. Every line here is a promise made by a comment
+# in the Dockerfile, which is exactly why it is worth asserting: a comment drifts
+# silently, a test does not.
+metadataTest:
+  # Non-root, and the specific UID the Dockerfile chose. Asserting the number
+  # rather than merely "not 0" is deliberate -- 10001 sits above the host system
+  # account range so a shared volume cannot map it onto a real account, and an
+  # edit down into that range should fail here.
+  user: '10001'
+  workdir: '/app'
+  entrypoint: ['java', '-jar', '/app/app.jar']
+  exposedPorts: ['8080']
+
+  envVars:
+    # A percentage, not a fixed -Xmx: the JVM then sizes the heap against the
+    # cgroup limit instead of against whatever laptop the flag was tuned on.
+    - key: 'JAVA_TOOL_OPTIONS'
+      value: '-XX:MaxRAMPercentage=75'
+
+  labels:
+    - key: 'org.opencontainers.image.title'
+      value: 'capstone-crm-api'
+    - key: 'org.opencontainers.image.version'
+      value: '0.0.1-SNAPSHOT'
+    # The point of the GIT_SHA build argument: an image on a registry has to be
+    # traceable back to the commit that produced it. A regex, because the value
+    # changes every commit -- but "unknown", the ARG default, must not survive a
+    # real build, and this is what catches a pipeline that forgot the argument.
+    - key: 'org.opencontainers.image.revision'
+      value: '^[0-9a-f]{40}$'
+      isRegex: true
+
+# --------------------------------------------------------------------------
+fileExistenceTests:
+  # The artifact, owned by the runtime user rather than root.
+  - name: 'the application jar, owned by the runtime user'
+    path: '/app/app.jar'
+    shouldExist: true
+    uid: 10001
+
+  # Everything below is the multi-stage split, checked. Each of these exists in
+  # the build stage and must not have followed the jar into the runtime image.
+  - name: 'no build workspace'
+    path: '/workspace'
+    shouldExist: false
+  - name: 'no target directory'
+    path: '/app/target'
+    shouldExist: false
+  - name: 'no source tree'
+    path: '/app/src'
+    shouldExist: false
+  - name: 'no Maven wrapper'
+    path: '/app/mvnw'
+    shouldExist: false
+  - name: 'no Maven wrapper config'
+    path: '/app/.mvn'
+    shouldExist: false
+  - name: 'no pom'
+    path: '/app/pom.xml'
+    shouldExist: false
+
+  # .dockerignore keeps .env out of the build context, so no instruction could
+  # have copied one even by accident. These two are that promise, checked.
+  - name: 'no .env beside the jar'
+    path: '/app/.env'
+    shouldExist: false
+  - name: 'no .env at the root'
+    path: '/.env'
+    shouldExist: false
+
+  # The local Maven repository is where a build stage caches every dependency it
+  # downloaded, and it is tens of megabytes of nothing the runtime reads.
+  - name: 'no Maven repository cache'
+    path: '/root/.m2'
+    shouldExist: false
+
+# --------------------------------------------------------------------------
+commandTests:
+  # The JDK belongs to the build stage. javac in the final image means the split
+  # leaked and a compiler ships to production -- more attack surface, and one
+  # more component for the vulnerability scan to have an opinion about.
+  #
+  # Asserting on output rather than on the exit code, because /bin/sh here is
+  # dash, and dash's `command -v` exits 127 for a missing command where bash
+  # exits 1. Pinning either number ties the test to whichever shell the base
+  # image happens to ship; the word this prints is the same in both.
+  - name: 'no JDK in the runtime image'
+    command: 'sh'
+    args: ['-c', 'command -v javac >/dev/null 2>&1 && echo present || echo absent']
+    expectedOutput: ['(?m)^absent$']
+
+  - name: 'no Maven in the runtime image'
+    command: 'sh'
+    args: ['-c', 'command -v mvn >/dev/null 2>&1 && echo present || echo absent']
+    expectedOutput: ['(?m)^absent$']
+
+  # The healthcheck opens /dev/tcp, which is a bash builtin and not a file. bash
+  # specifically -- not merely some sh -- has to be present, or every probe fails
+  # and the container never reports healthy however well it is actually running.
+  - name: 'bash present for the /dev/tcp healthcheck'
+    command: 'bash'
+    args: ['-c', 'echo ok']
+    exitCode: 0
+    expectedOutput: ['ok']
+
+  # No assertion that curl is absent: eclipse-temurin:21-jre ships it at
+  # /usr/bin/curl already. Worth knowing, because the Dockerfile explains the
+  # /dev/tcp healthcheck as avoiding an extra package -- there was never a
+  # package to avoid, and a test written from that comment fails on the image.
+
+  # Anchors need (?m). container-structure-test matches with Go's regexp, where
+  # a bare $ means end of text and command output ends in a newline, so '^x$'
+  # never matches anything a command actually prints.
+  - name: 'the process runs as uid 10001'
+    command: 'id'
+    args: ['-u']
+    expectedOutput: ['(?m)^10001$']
+
+  - name: 'the runtime user is not in the root group'
+    command: 'id'
+    args: ['-G']
+    excludedOutput: ['(^|\s)0(\s|$)']
+
+  # /app is created by WORKDIR while the build is still root, so it stays
+  # root-owned and the runtime user cannot write into it. That is what stops a
+  # compromised process from replacing the jar it is running from.
+  - name: 'the runtime user cannot overwrite its own jar'
+    command: 'sh'
+    args: ['-c', 'touch /app/planted.jar']
+    exitCode: 1
+
+  - name: '/app holds the jar and nothing else'
+    command: 'ls'
+    args: ['/app']
+    expectedOutput: ['(?m)^app\.jar$']
+
+  # A jar this small would be a manifest and no classes, which is what a COPY
+  # glob matching the wrong file looks like.
+  - name: 'the jar is a whole archive, not a stub'
+    command: 'sh'
+    args: ['-c', 'test "$(stat -c %s /app/app.jar)" -gt 20000000 && head -c 2 /app/app.jar']
+    exitCode: 0
+    expectedOutput: ['PK']
+
+  # Wider than the named keys in unsetEnvVars above: any variable whose name
+  # looks like a credential, whatever it is called.
+  - name: 'no credential-shaped variable in the environment'
+    command: 'sh'
+    args: ['-c', 'env | grep -Ei "^(JWT_SECRET|.*PASSWORD|.*_SECRET|.*TOKEN)="']
+    exitCode: 1
+
+  # Wider than the two .env paths above: any env file or private key anywhere on
+  # the filesystem, wherever a careless COPY might have dropped one.
+  #
+  # The system trust store is pruned rather than matched. It is roughly 150 .pem
+  # files of public root certificates that belong in any image doing TLS, and a
+  # sweep that flags them is a sweep everyone learns to ignore -- which is how a
+  # real finding gets scrolled past. Private key material has different names.
+  - name: 'no env file or private key anywhere in the image'
+    command: 'sh'
+    args:
+      - '-c'
+      - >-
+        test -z "$(find / -xdev
+        -path /etc/ssl -prune -o
+        -path /usr/lib/ssl -prune -o
+        -path /usr/share/ca-certificates -prune -o
+        \( -name ".env*" -o -name "id_rsa" -o -name "id_ecdsa" -o -name "id_ed25519"
+        -o -name "*.p12" -o -name "*.jks" -o -name ".netrc" -o -name ".npmrc"
+        -o -name ".git-credentials" -o -name "credentials" \)
+        -print -quit 2>/dev/null)"
+    exitCode: 0
+
+  # The build context excludes .git, so nothing in the build could read it and
+  # nothing in the image should contain it. A repository copied into an image
+  # carries every branch and every secret ever committed and later removed.
+  - name: 'no git repository in the image'
+    command: 'sh'
+    args: ['-c', 'test -z "$(find / -xdev -name ".git" -print -quit 2>/dev/null)"']
+    exitCode: 0
