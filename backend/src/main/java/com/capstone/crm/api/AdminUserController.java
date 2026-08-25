@@ -47,8 +47,10 @@ public class AdminUserController {
      * role and enabled together.
      */
     @PatchMapping("/{userId}/enable")
-    public ResponseEntity<UserResponse> enable(@PathVariable Long userId) {
-        return ResponseEntity.ok(userService.enable(userId));
+    public ResponseEntity<UserResponse> enable(
+            @PathVariable Long userId,
+            Authentication authentication) {
+        return ResponseEntity.ok(userService.enable(userId, authentication.getName()));
     }
 
     @PostMapping
