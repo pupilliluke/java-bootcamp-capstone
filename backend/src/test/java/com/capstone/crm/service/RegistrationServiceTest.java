@@ -1,6 +1,7 @@
 package com.capstone.crm.service;
 
 import com.capstone.crm.api.dto.RegisterRequest;
+import com.capstone.crm.api.dto.RegistrationResponse;
 import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.entity.AppUser;
 import com.capstone.crm.entity.UserRole;
@@ -45,7 +46,7 @@ class RegistrationServiceTest {
         when(passwordEncoder.encode("correct-horse-battery")).thenReturn("hashed-value");
         when(users.save(any(AppUser.class))).thenAnswer(call -> call.getArgument(0));
 
-        UserResponse response = service.register(request());
+        RegistrationResponse response = service.register(request());
 
         ArgumentCaptor<AppUser> saved = ArgumentCaptor.forClass(AppUser.class);
         verify(users).save(saved.capture());
@@ -59,30 +60,66 @@ class RegistrationServiceTest {
                 .isEqualTo("hashed-value")
                 .isNotEqualTo("correct-horse-battery");
 
+        // The response tells the caller their account exists and is waiting, and
+        // nothing else. It deliberately carries no id: id is an identity column,
+        // so two registrations and a subtraction would reveal how many accounts
+        // were created in between.
         assertThat(response.username()).isEqualTo("new-agent");
-        assertThat(response.enabled()).isFalse();
-        assertThat(response.role()).isEqualTo(UserRole.AGENT);
+        assertThat(response.status()).isEqualTo("PENDING_APPROVAL");
     }
 
+    // Both collisions produce the identical message. Naming the field would let
+    // an anonymous caller check whether a particular person has an account here,
+    // and the front end renders this message verbatim.
     @Test
-    void rejectsADuplicateUsername() {
+    void rejectsADuplicateUsernameWithoutSayingWhichFieldCollided() {
         when(users.existsByUsernameIgnoreCase("new-agent")).thenReturn(true);
 
         assertThatThrownBy(() -> service.register(request()))
                 .isInstanceOf(DuplicateUserException.class)
-                .hasMessageContaining("new-agent");
+                .hasMessage("Username or email is already in use");
 
         verify(users, never()).save(any());
     }
 
     @Test
-    void rejectsADuplicateEmail() {
+    void rejectsADuplicateEmailWithTheSameMessage() {
         when(users.existsByUsernameIgnoreCase("new-agent")).thenReturn(false);
         when(users.existsByEmailIgnoreCase("new-agent@example.test")).thenReturn(true);
 
         assertThatThrownBy(() -> service.register(request()))
                 .isInstanceOf(DuplicateUserException.class)
-                .hasMessageContaining("new-agent@example.test");
+                .hasMessage("Username or email is already in use");
+
+        verify(users, never()).save(any());
+    }
+
+    // Short-circuiting the second check would make a taken username measurably
+    // cheaper to probe than a taken email, which is a difference an anonymous
+    // caller can time from outside.
+    @Test
+    void checksBothFieldsEvenWhenTheUsernameAlreadyFailed() {
+        when(users.existsByUsernameIgnoreCase("new-agent")).thenReturn(true);
+        when(users.existsByEmailIgnoreCase("new-agent@example.test")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.register(request()))
+                .isInstanceOf(DuplicateUserException.class);
+
+        verify(users).existsByUsernameIgnoreCase("new-agent");
+        verify(users).existsByEmailIgnoreCase("new-agent@example.test");
+    }
+
+    // DemoUserSeeder skips a username that already exists, silently. Letting an
+    // anonymous caller take "admin1" would leave an environment whose only
+    // administrator account belongs to a stranger.
+    @Test
+    void refusesUsernamesTheDemoSeederDependsOn() {
+        when(users.existsByEmailIgnoreCase(any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.register(
+                new RegisterRequest("admin1", "not-the-real-admin@example.test", "correct-horse-battery")))
+                .isInstanceOf(DuplicateUserException.class)
+                .hasMessage("Username or email is already in use");
 
         verify(users, never()).save(any());
     }

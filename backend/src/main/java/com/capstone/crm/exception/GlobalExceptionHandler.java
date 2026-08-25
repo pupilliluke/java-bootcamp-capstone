@@ -6,6 +6,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.validation.FieldError;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -65,6 +66,17 @@ public class GlobalExceptionHandler {
                     .append("; ");
         }
         return build(HttpStatus.BAD_REQUEST, message.toString());
+    }
+
+    /**
+     * A path variable that will not convert - /api/admin/users/abc reaching a
+     * handler that wants a Long. Without this the catch-all below answers 500,
+     * which tells an operator "we broke" when the truth is "you asked for
+     * something that is not a number".
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return build(HttpStatus.BAD_REQUEST, "Invalid value for '" + ex.getName() + "'");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

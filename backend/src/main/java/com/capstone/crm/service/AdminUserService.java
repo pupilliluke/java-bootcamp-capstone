@@ -11,6 +11,8 @@ import com.capstone.crm.exception.SelfUserModificationException;
 import com.capstone.crm.exception.UserNotFoundException;
 import com.capstone.crm.repository.AppUserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,8 @@ import java.util.List;
 
 @Service
 public class AdminUserService {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminUserService.class);
 
     private final AppUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -48,22 +52,36 @@ public class AdminUserService {
      */
     @Transactional(readOnly = true)
     public List<UserResponse> listPending() {
-        return userRepository.findByEnabledFalseOrderByCreatedAtAsc().stream()
+        return userRepository.findByEnabledFalseAndRoleOrderByCreatedAtAsc(UserRole.AGENT).stream()
                 .map(this::toResponse)
                 .toList();
     }
 
     /**
-     * Approves a pending account. Idempotent: enabling an already-enabled user
-     * is a no-op that still returns the account, so a double-clicked Approve
-     * button cannot turn into an error.
+     * Approves a pending sign-up. Idempotent: enabling an already-enabled user is
+     * a no-op that still returns the account, so a double-clicked Approve button
+     * cannot turn into an error.
+     *
+     * Refuses anything that is not an AGENT. Re-enabling a suspended
+     * administrator is a different decision with different consequences, and it
+     * belongs in the user editor where the actor has to choose the role
+     * explicitly - not behind a button labelled "approve pending accounts".
      */
     @Transactional
-    public UserResponse enable(Long userId) {
+    public UserResponse enable(Long userId, String actingUsername) {
         AppUser user = findUser(userId);
+        if (user.getRole() != UserRole.AGENT) {
+            throw new SelfUserModificationException(
+                    "Only agent accounts can be approved here; use the user editor to change an administrator");
+        }
         if (!user.isEnabled()) {
             user.setEnabled(true);
             user = userRepository.save(user);
+            // Granting access should leave a name behind, not just a timestamp.
+            // Without this the harmless action (registering) is logged and the
+            // privilege-granting one is not.
+            log.info("account_enabled actor={} user={} role={}",
+                    actingUsername, user.getUsername(), user.getRole());
         }
         return toResponse(user);
     }

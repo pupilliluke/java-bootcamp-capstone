@@ -3,6 +3,7 @@ package com.capstone.crm.api;
 import com.capstone.crm.api.dto.LoginRequestDTO;
 import com.capstone.crm.api.dto.LoginResponseDTO;
 import com.capstone.crm.api.dto.RegisterRequest;
+import com.capstone.crm.api.dto.RegistrationResponse;
 import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.exception.InvalidCredentialsException;
 import com.capstone.crm.security.JwtService;
@@ -46,8 +47,8 @@ public class AuthController {
      * administrator approves it.
      */
     @PostMapping("/register")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
-        UserResponse created = registrationService.register(request);
+    public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
+        RegistrationResponse created = registrationService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
