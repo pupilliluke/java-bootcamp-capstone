@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import CustomerFormPage from './CustomerFormPage'
+import { ApiError } from '../api/ApiError'
 
 // Hoisted so the mock factory below can close over them: vi.mock is lifted
 // above the imports, and a plain const would not exist yet when it runs.
@@ -65,5 +66,26 @@ describe('CustomerFormPage', () => {
       ),
     )
     expect(create).not.toHaveBeenCalled()
+  })
+
+  // The server refuses an agent who picks CLOSED in the status dropdown. The
+  // form has to say so — a save that quietly does nothing reads as a broken
+  // button, and the user retries instead of asking an admin.
+  it('shows the reason when the server refuses the save', async () => {
+    update.mockRejectedValue(
+      new ApiError('Only an administrator can close a customer', 'http', 403),
+    )
+    const user = userEvent.setup()
+    render(<CustomerFormPage navigate={navigate} onCreated={onCreated} edit={editCustomer} />)
+
+    await user.selectOptions(screen.getByRole('combobox'), 'CLOSED')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /only an administrator can close a customer/i,
+    )
+    // Still on the form, with the input preserved, rather than navigated away.
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeEnabled()
   })
 })

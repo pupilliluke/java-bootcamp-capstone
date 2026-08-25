@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -115,5 +116,86 @@ class CustomerControllerTest {
         mockMvc.perform(delete("/api/customers/CUS-9999")
                         .header("Authorization", "Bearer " + jwtService.issueToken("admin1", "ADMIN")))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- closing is ADMIN-only however you reach it ---------------------------
+    //
+    // delete() is a soft delete: it sets CLOSED and keeps the record. So the
+    // ADMIN rule on DELETE only holds if PUT cannot reach the same state, and
+    // before this it could — the edit form offers CLOSED in its status dropdown
+    // and any agent could pick it. These three pin the rule down: the transition
+    // is refused, an admin may make it, and an already-closed customer stays
+    // editable so the guard does not freeze the record.
+    //
+    // Each test makes its own customer. The repository is an in-memory map shared
+    // across every test in this context, so reusing CUS-1001 would make the
+    // result depend on which test ran first.
+    @Test
+    void agentIsForbiddenFromClosingACustomerThroughUpdate() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer("CUS-7001", agent);
+
+        mockMvc.perform(put("/api/customers/CUS-7001")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("Case Study", "CLOSED")))
+                .andExpect(status().isForbidden())
+                // The body matters, not just the status: the edit form renders
+                // this string, so an agent sees why the save was refused rather
+                // than a form that silently does nothing.
+                .andExpect(jsonPath("$.message").value("Only an administrator can close a customer"));
+
+        mockMvc.perform(get("/api/customers/CUS-7001")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void adminCanCloseACustomerThroughUpdate() throws Exception {
+        String admin = jwtService.issueToken("admin1", "ADMIN");
+        createCustomer("CUS-7002", admin);
+
+        mockMvc.perform(put("/api/customers/CUS-7002")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("Case Study", "CLOSED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    @Test
+    void agentCanStillEditACustomerThatIsAlreadyClosed() throws Exception {
+        String admin = jwtService.issueToken("admin1", "ADMIN");
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer("CUS-7003", admin);
+
+        mockMvc.perform(delete("/api/customers/CUS-7003")
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/api/customers/CUS-7003")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("Renamed While Closed", "CLOSED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Renamed While Closed"))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    private void createCustomer(String customerId, String token) throws Exception {
+        mockMvc.perform(post("/api/customers")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"%s","fullName":"Case Study","email":"case@example.test",\
+                                "phone":"555-0000","status":"ACTIVE"}
+                                """.formatted(customerId)))
+                .andExpect(status().isCreated());
+    }
+
+    private static String bodyWithStatus(String fullName, String status) {
+        return """
+                {"fullName":"%s","email":"case@example.test","phone":"555-0000","status":"%s"}
+                """.formatted(fullName, status);
     }
 }
