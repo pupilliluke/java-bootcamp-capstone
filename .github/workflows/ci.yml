@@ -362,25 +362,48 @@ jobs:
       # k3d rather than kind, because it is what the team runs locally. The
       # rehearsal in docs/rollback-runbook.md and this job are then evidence
       # about the same thing rather than two similar ones.
-      # The k3s image is pinned, not left to the action's default. AbsaOSS
-      # v2.4.0 defaults to k3d v5.4.6, whose baked-in k3s is ~1.24 -- eleven minor
-      # versions below the 1.35.5 the manifests job validates against, and below
-      # the v1.35.5+k3s1 the local cluster in docs/rollback-runbook.md runs. Left
-      # unpinned, the schema gate and the cluster disagree about what Kubernetes
-      # is, and the CI run is not evidence about the same thing as the rehearsal.
+      # k3d is installed directly rather than through AbsaOSS/k3d-action. That
+      # action hardcodes k3d v5.4.6 and its installer now 404s -- observed on
+      # run 32898474495, which failed before a cluster ever existed. Pinning the
+      # version here also means CI runs the same k3d as a laptop, so the
+      # rehearsal recorded in docs/rollback-runbook.md and this job are evidence
+      # about the same thing rather than two similar ones.
+      - name: Install k3d
+        run: |
+          # pipefail matters here for the same reason it does in the manifests
+          # job. Piping curl into bash under the default `bash -e {0}` hides
+          # curl's exit code, and a failed download feeds bash an empty script
+          # which exits 0 -- a silently skipped install, not a failed one.
+          set -o pipefail
+          curl -sfL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.9.0 bash
+
+          # The install is only real if the binary runs.
+          k3d version
+
+      # The same flags as the create command in docs/rollback-runbook.md.
+      #
+      # --image is not optional: k3d's built-in default k3s moves with every k3d
+      # release, and a cluster on a different one is not the cluster the
+      # manifests job validates against.
       - name: Create the cluster
-        uses: AbsaOSS/k3d-action@v2.4.0
-        with:
-          cluster-name: ci
-          args: >-
-            --agents 0
-            -p "8088:80@loadbalancer"
+        run: |
+          k3d cluster create ci --agents 0 \
+            -p "8088:80@loadbalancer" \
+            --api-port 127.0.0.1:6445 \
             --image rancher/k3s:v1.35.5-k3s1
+          kubectl version
+          kubectl get nodes
 
       # k3d runs its own containerd; an image in the runner's Docker daemon is
       # not visible to it. Without this the pod sits in ErrImagePull.
       - name: Load the image into the cluster
-        run: k3d image import crm-api:dev -c ci
+        run: |
+          k3d image import crm-api:dev -c ci
+          # Verified rather than assumed. k3d image import can exit 0 having
+          # imported nothing -- observed locally, where the pod then spent ten
+          # minutes in ContainerCreating pulling from Docker Hub instead. grep
+          # fails the step if the image is not actually in the cluster.
+          docker exec k3d-ci-server-0 crictl images | grep crm-api
 
       # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on
       # Windows, where git does not reliably carry the executable bit, and a
