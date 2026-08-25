@@ -282,10 +282,127 @@ jobs:
       # Pinned to the version the k3d cluster actually runs, so a field valid on
       # a newer API but absent here is caught rather than waved through.
       # -strict rejects unknown fields; without it a typo is silently ignored.
+      # The count guard is the part that makes this a check rather than a
+      # formality. kubeconform exits 0 on an empty directory -- "0 resources
+      # found ... Errors: 0" -- so a renamed folder or a wrong path would go
+      # green having validated nothing. Verified: an empty directory passes on
+      # its own, and fails with the guard.
+      #
+      # -verbose names each file in the log, so the run is its own evidence
+      # rather than a single summary line nobody can check.
       - name: Validate the Kubernetes manifests
         run: |
+          # Required, and not decoration. GitHub's default shell is `bash -e {0}`
+          # WITHOUT pipefail -- only an explicit `shell: bash` adds it. kubeconform
+          # is piped into tee below so the report can be uploaded as an artifact,
+          # and without this line the step's exit status is tee's, which is always
+          # 0. Verified against kubeconform v0.8.0 and a real broken manifest:
+          # renaming failureThreshold to failureThresold exits 1 unpiped, exits 0
+          # through the pipe, and exits 1 again with this line present. The
+          # file-count guard below does not compensate -- kubeconform prints the
+          # same "in 7 files" summary whether resources are valid or invalid.
+          set -o pipefail
+
+          expected=$(find k8s -name '*.yaml' -type f | wc -l | tr -d ' ')
+          if [ "$expected" -eq 0 ]; then
+            echo "No manifests found in k8s/ - nothing was validated."
+            exit 1
+          fi
+          echo "Validating $expected manifest(s)"
+
           curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz             | tar -xz kubeconform
-          ./kubeconform -strict -summary -kubernetes-version 1.28.15 k8s/
+
+          ./kubeconform -strict -summary -verbose             -kubernetes-version 1.35.5 k8s/ | tee kubeconform.txt
+
+          grep -q "in $expected file" kubeconform.txt || {
+            echo "kubeconform validated a different number of files than the $expected present."
+            exit 1
+          }
+
+      - name: Upload the validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeconform-report
+          path: kubeconform.txt
+
+  # Deploys the manifests to a real cluster, proves the application serves, breaks
+  # the deployment on purpose and proves it recovers.
+  #
+  # The manifests job answers "are these legal Kubernetes resources". This one
+  # answers the question that actually matters: does the thing they describe
+  # work. A schema check would pass a Deployment that points at an image which
+  # does not exist, names a Secret key nothing provides, or probes a path that
+  # returns 404.
+  #
+  # Runs after image, so a cluster is only spun up for an image that already
+  # passed hadolint, the structure tests and its own integration suite.
+  cluster:
+    name: cluster
+    needs: [backend, frontend, image]
+    runs-on: ubuntu-latest
+    # Bounded deliberately: a cluster that never converges would otherwise hold a
+    # runner for the six-hour default. A full local run is about four minutes.
+    #
+    # 30 rather than 20, because smoke.sh's own waits can legitimately add up past
+    # 20 on a bad run -- 420s for the postgres pull, 300s for the rollout, 60s for
+    # the deliberate break, 300s for the rollback -- on top of a cold docker build.
+    # The job timeout should be the backstop that catches a hang, not the thing
+    # that fires first on a merely slow run.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rebuilt rather than carried from the image job: jobs do not share a
+      # Docker daemon, and the layer cache makes this cheap. GIT_SHA matters --
+      # the structure tests reject an image whose revision label says "unknown".
+      - name: Build the image
+        run: docker build --build-arg GIT_SHA=${{ github.sha }} -t crm-api:dev backend
+
+      # k3d rather than kind, because it is what the team runs locally. The
+      # rehearsal in docs/rollback-runbook.md and this job are then evidence
+      # about the same thing rather than two similar ones.
+      # The k3s image is pinned, not left to the action's default. AbsaOSS
+      # v2.4.0 defaults to k3d v5.4.6, whose baked-in k3s is ~1.24 -- eleven minor
+      # versions below the 1.35.5 the manifests job validates against, and below
+      # the v1.35.5+k3s1 the local cluster in docs/rollback-runbook.md runs. Left
+      # unpinned, the schema gate and the cluster disagree about what Kubernetes
+      # is, and the CI run is not evidence about the same thing as the rehearsal.
+      - name: Create the cluster
+        uses: AbsaOSS/k3d-action@v2.4.0
+        with:
+          cluster-name: ci
+          args: >-
+            --agents 0
+            -p "8088:80@loadbalancer"
+            --image rancher/k3s:v1.35.5-k3s1
+
+      # k3d runs its own containerd; an image in the runner's Docker daemon is
+      # not visible to it. Without this the pod sits in ErrImagePull.
+      - name: Load the image into the cluster
+        run: k3d image import crm-api:dev -c ci
+
+      # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on
+      # Windows, where git does not reliably carry the executable bit, and a
+      # missing +x would fail this job with "permission denied" for a reason that
+      # has nothing to do with the manifests.
+      - name: Deploy, smoke, break, recover
+        run: bash k8s/smoke.sh
+
+      # Only on failure, and worth the noise then: a red cluster job with no
+      # cluster left to inspect is nearly impossible to diagnose from a runner
+      # that has already been destroyed.
+      # failure() || cancelled(), not failure() alone. Exceeding timeout-minutes
+      # CANCELS a job rather than failing it, so `if: failure()` would skip this
+      # step in exactly the case where the cluster state is most needed and the
+      # runner is about to be destroyed with it.
+      - name: Diagnostics
+        if: ${{ failure() || cancelled() }}
+        run: |
+          kubectl -n crm get all -o wide || true
+          kubectl -n crm describe pods || true
+          kubectl -n crm logs -l app=crm-api --tail=200 --all-containers || true
+          kubectl -n crm get events --sort-by=.lastTimestamp | tail -40 || true
 
   package:
     name: package
