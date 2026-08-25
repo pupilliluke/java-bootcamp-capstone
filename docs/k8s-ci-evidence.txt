@@ -1,0 +1,178 @@
+Kubernetes CI evidence
+Branch: k8s-manifests
+Date: 2026-08-25
+Cluster: k3d-crm-local, namespace crm
+Kubernetes: k3s v1.35.5+k3s1, kubectl v1.35.5 (matched, no skew warning)
+Image: crm-api:dev, sha256:ebfe1486a16d77a6dedc0c5f8ed92eec56618f55fd1cdf53d789667d016e69b2
+       revision 5f1bb6d8013f204db7fd5965d6604352ba5fd889
+
+WHAT WAS ADDED
+
+k8s/smoke.sh           deploys the manifests, proves the app serves, breaks the
+                       deployment on purpose, proves it recovers
+k8s/test/postgres.yaml throwaway PostgreSQL for the smoke test only
+ci.yml job "cluster"   runs the above on a real k3d cluster on every push and PR
+
+The existing "manifests" job validates schemas with kubeconform. It cannot tell
+whether a probe path resolves, an image exists, or a Secret is wired. The
+"cluster" job answers that.
+
+
+TIMED RUN - 164 SECONDS, TWELVE ASSERTIONS
+
+  [  1s] == 1. Namespace and the test database ==
+  [  8s]   PASS  PostgreSQL is up
+  [  8s] == 2. Secret, created out of band ==
+  [  8s]   PASS  Secret created without touching a file
+  [  8s] == 3. The real manifests ==
+  [ 99s]   PASS  Deployment rolled out
+  [ 99s] == 4. The application serves through the ingress ==
+  [ 99s]   PASS  readiness 200
+  [101s]   PASS  login issued a token
+  [101s]   PASS  authenticated read 200
+  [102s]   PASS  anonymous read refused with 401
+  [102s] == 5. Break it on purpose ==
+  [162s]   PASS  the bad rollout did not converge
+  [162s]      crm-api-846b58685d-8b6m8    1/1   Running        0     2m34s
+  [163s]      crm-api-857f6dd996-hh8wx    0/1   ErrImagePull   0     60s
+  [163s]      postgres-6b98f98494-mlh7b   1/1   Running        0     2m42s
+  [163s]   PASS  the ingress kept serving 200 throughout
+  [163s] == 6. Recover through automation ==
+  [163s]   PASS  image restored to crm-api:dev
+  [164s]   PASS  readiness 200 after rollback
+  [164s]   PASS  authorisation still enforced after rollback
+  [164s] == all checks passed ==
+
+Where the time goes. The 90-second rollout is Spring Boot starting: Flyway,
+context init, Kafka consumer setup, then readiness going green. That is the
+application's own startup, not Kubernetes overhead. The four HTTP assertions
+that actually prove the app works take 3 seconds between them. Step 5 costs a
+fixed 60 seconds because proving a rollout will NOT converge means waiting out
+its timeout; there is no shortcut for a negative. The rollback in step 6 is
+effectively instant because Kubernetes repoints at a ReplicaSet that never
+stopped running.
+
+Preloading matters. With postgres:17 pulled cold this step took minutes rather
+than 8 seconds:
+
+  k3d image import postgres:17 -c crm-local
+
+The two pods in step 5 are the point. The bad revision sat in ErrImagePull while
+the good one kept serving. A rolling update does not take a healthy pod down for
+an unhealthy replacement, so no request reached the broken version.
+
+
+PROOF THE CHECK CAN FAIL
+
+Each edit below was applied to k8s/deployment.yaml, run against the same
+cluster, and reverted. All three pass kubeconform: they are legal Kubernetes.
+
+MUTATION 1  startup probe path readiness -> raediness
+  changed line 114:  path: /actuator/health/raediness
+  exit code 1, caught at step 3, "timed out waiting for the condition"
+
+MUTATION 2  image tag that does not exist
+  changed line 55:  image: crm-api:nope-does-not-exist
+  exit code 1, caught at step 3
+
+MUTATION 3  secretRef removed from envFrom
+  the two lines naming crm-api-secrets replaced with a comment
+  exit code 1, caught at step 3
+  Mechanism, read off the pod: 0/1 Running with a restart, not
+  CrashLoopBackOff. Without the Secret there is no database password, the
+  datasource fails, and db is in the readiness group, so the container runs
+  while never becoming ready. That is the readiness-group split in
+  deployment.yaml behaving as its comment claims.
+
+RESTORE  unmodified manifest, full run: 12 PASS, exit 0
+
+The same three mutations were run and caught on Kubernetes 1.28.15 before the
+version bump, and again on 1.35.5 after it.
+
+
+DEFECTS THESE CHECKS FOUND
+
+1. smoke.sh could never have caught a bad image tag. It ran
+
+     kubectl set image deploy/crm-api crm-api=$IMAGE
+
+   unconditionally with IMAGE defaulting to crm-api:dev, so a wrong tag
+   committed in the manifest was overwritten with a known-good one before the
+   deployment was tested. IMAGE now defaults to empty and the manifest's own tag
+   is used unless IMAGE is set explicitly.
+
+2. The manifests job had stopped gating. kubeconform was piped into tee so the
+   report could be uploaded as an artifact, which made the step's exit status
+   tee's. GitHub Actions runs steps under bash -e without pipefail unless an
+   explicit shell: bash is set. Measured with a real broken manifest:
+
+     kubeconform alone                     exit 1
+     the step as CI would run it           exit 0   <- broken manifest passed
+     the same step with set -o pipefail    exit 1
+
+   Fixed with set -o pipefail. Re-tested by extracting the step from ci.yml:
+   good manifest exit 0, broken manifest exit 1.
+
+3. The CI cluster and the schema check disagreed about the Kubernetes version.
+   AbsaOSS/k3d-action@v2.4.0 defaults to k3d v5.4.6, whose k3s is about 1.24.
+   Both are now pinned to 1.35.5.
+
+4. A job timeout would have destroyed the diagnostics. Exceeding timeout-minutes
+   cancels a job rather than failing it, and a cancelled job skips steps guarded
+   by if: failure(). The Diagnostics step now runs on
+   if: failure() || cancelled().
+
+
+LIMITS OF THIS EVIDENCE
+
+All three mutations fail at the same point with the same message, "timed out
+waiting for the condition". The job reports that the deployment broke, not which
+edit broke it. The diagnostics step dumps pod descriptions, logs and events,
+which is where the specific cause appears.
+
+These are three hand-picked edits matching three known failure modes, not
+systematic mutation coverage. They prove the check is failable. They do not
+prove it catches everything: a wrong CPU limit, or a resource request too large
+to schedule on a larger cluster, would still pass.
+
+Step 5 proves a bad image is survivable. It does not prove a version-to-version
+rollback, because one of the two revisions is an image that does not exist, so
+nothing was ever served by the bad version. Proving that needs two revisions
+carrying two different working images, which needs an image pushed per commit.
+The package job currently produces a jar and a checksum, not an image.
+
+smoke.sh writes to whatever kubectl context is current, with no guard that the
+target is disposable. Harmless while the only clusters are ephemeral k3d. It
+becomes a real hazard the day a hosted cluster exists.
+
+
+ENVIRONMENT-SPECIFIC BUGS FIXED WHILE BUILDING THIS
+
+These reproduce only on Git Bash on Windows and would have passed on the Linux
+runner:
+
+1. kubectl could not read MSYS absolute paths (/c/Users/...). The script now
+   changes to the repository root and uses relative paths.
+2. curl exits 23 ("write error") writing a body to /dev/null under Git Bash,
+   after already printing the status code. An "|| echo 000" fallback therefore
+   appended a second value and the caller read "200000". The body now goes to a
+   mktemp file.
+3. postgres:17 needs more than 180s to pull cold. The rollout timeout is 420s.
+
+One flake was found and fixed: a single-shot login failed immediately after a
+rollout and the identical command succeeded seconds later. Readiness going UP
+means the new pod serves, but the ingress can still route to the outgoing pod
+while Traefik rebuilds its router. The login now polls.
+
+Two cluster-setup facts, both found by things failing rather than by reading:
+
+- k3d writes https://host.docker.internal:<port> into the kubeconfig, which
+  resolves to the machine's LAN address. On a laptop that has changed networks
+  that address does not answer, and every kubectl command fails against a
+  perfectly healthy cluster. --api-port 127.0.0.1:6445 pins it to loopback.
+- k3d image import accepts several images in one command, reports success, and
+  imports none of them. Import one at a time and verify the effect with
+
+    docker exec k3d-crm-local-server-0 crictl images
+
+  An exit code is not evidence that the image reached the cluster.

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useCustomer } from '../hooks/useCustomer'
 import { interactionsApi } from '../api/interactions'
 import { ApiError } from '../api/ApiError'
@@ -9,7 +9,7 @@ import type { Navigate } from '../nav'
 import StatusBadge from '../components/StatusBadge'
 import DemoTag from '../components/DemoTag'
 import { IconBuilding } from '../components/icons'
-import { MOCK_ACTIVITIES, MOCK_CONTACTS } from '../mock/mockData'
+import { MOCK_CONTACTS } from '../mock/mockData'
 
 type Tab = 'overview' | 'contacts' | 'activities'
 const CHANNELS: Channel[] = ['PHONE', 'EMAIL', 'CHAT']
@@ -24,18 +24,46 @@ export default function CustomerDetailsPage({
   const { customer, loading, error } = useCustomer(customerId)
   const [tab, setTab] = useState<Tab>('overview')
 
-  // Real interaction recorder (POST /api/interactions). Timeline is local:
-  // the backend is fire-and-forget over Kafka with no GET to list.
   const [channel, setChannel] = useState<Channel>('PHONE')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
-  const [recorded, setRecorded] = useState<Interaction[]>([])
+  const [interactions, setInteractions] = useState<Interaction[]>([])
+  const [interactionsLoading, setInteractionsLoading] = useState(true)
+  const [interactionsError, setInteractionsError] = useState('')
   const [note, setNote] = useState('')
 
   // Closing a customer is ADMIN-only. The button is hidden for agents, and the API
   // refuses them independently — the hidden control is convenience, not the guard.
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const ctrl = new AbortController()
+    setInteractionsLoading(true)
+    setInteractionsError('')
+    setInteractions([])
+    interactionsApi
+      .list(customerId, ctrl.signal)
+      .then((loaded) => {
+        // Merged, not assigned. A list request still in flight when an
+        // interaction is recorded resolves afterwards, and replacing the array
+        // wholesale would drop the row the user just saved.
+        setInteractions((prev) => {
+          const known = new Set(loaded.map((it) => it.interactionId))
+          return [...prev.filter((it) => !known.has(it.interactionId)), ...loaded]
+        })
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && err.kind === 'abort') return
+        setInteractionsError(
+          err instanceof ApiError ? err.message : 'Could not load interaction history',
+        )
+      })
+      .finally(() => {
+        if (!ctrl.signal.aborted) setInteractionsLoading(false)
+      })
+    return () => ctrl.abort()
+  }, [customerId])
 
   async function handleClose() {
     if (!customer) return
@@ -48,6 +76,10 @@ export default function CustomerDetailsPage({
     setCloseError(null)
     try {
       await customersApi.remove(customer.customerId)
+      // Cleared before navigating rather than relying on the navigation to
+      // unmount this page. It does today, but that is CustomerWorkspace's
+      // rendering detail, not something this handler should depend on.
+      setClosing(false)
       // The list refetches on remount, so the row shows its CLOSED status.
       navigate({ name: 'customers' })
     } catch (err) {
@@ -63,17 +95,12 @@ export default function CustomerDetailsPage({
     setNote('')
     try {
       const saved = await interactionsApi.create({ customerId, channel, notes: notes.trim() })
-      setRecorded((prev) => [saved, ...prev])
+      setInteractions((prev) => [saved, ...prev])
       setNotes('')
-      setNote('✓ Sent to backend (POST /api/interactions)')
+      setNote('✓ Saved and published')
     } catch (err) {
       const detail = err instanceof ApiError ? ` (${err.kind}${err.status ? ' ' + err.status : ''})` : ''
-      setNote(`Shown locally only — could not reach the interaction endpoint${detail}`)
-      setRecorded((prev) => [
-        { channel, notes: notes.trim(), createdAt: new Date().toISOString() },
-        ...prev,
-      ])
-      setNotes('')
+      setNote(`Could not save interaction${detail}`)
     } finally {
       setSaving(false)
     }
@@ -178,15 +205,21 @@ export default function CustomerDetailsPage({
               {note && <p className="note">{note}</p>}
             </form>
 
-            {recorded.length > 0 && (
-              <>
-                <p className="section-title" style={{ marginTop: '1.2rem' }}>This session</p>
+            <p className="section-title" style={{ marginTop: '1.2rem' }}>Interaction history</p>
+            {interactionsLoading && <div className="spinner-row">Loading interactions…</div>}
+            {interactionsError && <p className="error" role="alert">{interactionsError}</p>}
+            {!interactionsLoading && !interactionsError && interactions.length === 0 && (
+              <p className="empty">No interactions recorded for this customer.</p>
+            )}
+            {/* Not gated on interactionsError: a failed reload must not hide
+                interactions that were saved successfully. */}
+            {interactions.length > 0 && (
                 <div className="table-wrap">
                   <table className="data">
                     <thead><tr><th>Channel</th><th>Notes</th><th>Recorded</th></tr></thead>
                     <tbody>
-                      {recorded.map((it, i) => (
-                        <tr key={i}>
+                      {interactions.map((it) => (
+                        <tr key={it.interactionId}>
                           <td><span className="badge badge-channel">{it.channel}</span></td>
                           <td>{it.notes}</td>
                           <td className="muted">{new Date(it.createdAt).toLocaleString()}</td>
@@ -195,26 +228,7 @@ export default function CustomerDetailsPage({
                     </tbody>
                   </table>
                 </div>
-              </>
             )}
-
-            <div className="toolbar" style={{ margin: '1.4rem 0 0.6rem' }}>
-              <span className="section-title" style={{ margin: 0 }}>Past activity history</span>
-              <DemoTag />
-            </div>
-            <div className="table-wrap">
-              <table className="data">
-                <thead><tr><th>Date</th><th>Type</th><th>Subject</th><th>Assigned To</th><th>Status</th></tr></thead>
-                <tbody>
-                  {MOCK_ACTIVITIES.map((a, i) => (
-                    <tr key={i}>
-                      <td>{a.date}</td><td>{a.type}</td><td>{a.subject}</td><td>{a.assignedTo}</td>
-                      <td><span className={`badge badge-${a.status}`}>{a.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
       </div>

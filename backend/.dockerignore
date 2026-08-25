@@ -1,0 +1,37 @@
+# This governs the build CONTEXT, not COPY. Everything under backend/ is
+# packaged and sent to the Docker daemon before the first instruction runs, so
+# excluding a file here is stronger than merely declining to COPY it: an excluded
+# file never leaves the machine, and cannot end up in an image layer by accident.
+
+# 75 MB of build output, and the jar the image builds for itself anyway.
+target/
+
+# Secrets. .env is gitignored, which says nothing about Docker - without this
+# line a local .env would be shipped into the context and readable by any
+# instruction in the build.
+.env
+.env.*
+!.env.example
+
+# Evidence and reports, including Dependency-Check output.
+reports/
+*.log
+dependency-check-suppressions.xml
+
+# Test sources. The image build never runs them -- the Dockerfile packages with
+# maven.test.skip and CI runs the full verify outside the image -- so they are
+# dead weight in the context. Excluding them is not about the few hundred KB: it
+# is about the build cache. src/ is one COPY, so without this line editing any
+# test invalidates that layer and every layer after it, and adding one test file
+# costs a full dependency resolution and repackage, which is ten minutes.
+src/test/
+
+# Editor and OS noise.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Kept in the context deliberately: pom.xml, src/, mvnw and .mvn — the build
+# stage needs all four, and dropping any of them breaks the first COPY rather
+# than merely slowing the build down.

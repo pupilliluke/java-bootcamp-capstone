@@ -15,6 +15,17 @@
   <name>crm-backend</name>
   <properties>
     <java.version>21</java.version>
+
+    <!-- ContainerImageIT tests a built Docker image, so it needs one to exist.
+         The ordinary build has no reason to have built it, and a test that
+         cannot run must not be the thing that reddens `mvn verify` on a laptop
+         with Docker closed. It is therefore excluded by default and switched on
+         by -Pimage-tests, which is what the image job in CI runs once the image
+         has actually been built. Excluded here rather than skipped inside the
+         test: when it does run, it fails loudly on a missing image rather than
+         passing quietly, and that distinction only survives if the decision to
+         run it is made outside the test. -->
+    <failsafe.excluded.tests>**/ContainerImageIT.java</failsafe.excluded.tests>
   </properties>
   <dependencies>
     <dependency>
@@ -100,6 +111,16 @@
       <artifactId>h2</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Drives the container tests in ContainerImageIT: starts the built image
+         against a throwaway PostgreSQL and talks to it over HTTP. The postgresql
+         module pulls Testcontainers core and the docker-java client with it, so
+         it is the only coordinate needed. Version comes from Spring Boot's BOM,
+         which manages testcontainers-bom. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
   <build>
     <plugins>
@@ -135,6 +156,11 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>${failsafe.excluded.tests}</exclude>
+          </excludes>
+        </configuration>
         <executions>
           <execution>
             <goals>
@@ -146,4 +172,26 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <!-- The container tests. Run once the image has been built, never before:
+         build it with docker (passing GIT_SHA as a build argument) and tag it
+         crm-api:test, then `./mvnw verify -Pimage-tests`. The image job in
+         .github/workflows/ci.yml does exactly that, in that order.
+
+         This flips the property rather than redeclaring includes and excludes,
+         because Maven merges plugin configuration between the base build and a
+         profile, and the merge rules for lists are their own small source of
+         surprise. Overriding one property has no such ambiguity.
+
+         Setting the crm.image system property points the same assertions at any
+         other tag, which is how you check what a registry actually holds rather
+         than what happened to be built on this machine. -->
+    <profile>
+      <id>image-tests</id>
+      <properties>
+        <failsafe.excluded.tests>nothing-is-excluded-under-this-profile</failsafe.excluded.tests>
+      </properties>
+    </profile>
+  </profiles>
 </project>

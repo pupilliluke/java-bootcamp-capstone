@@ -1,6 +1,7 @@
 package com.capstone.crm.api;
 
 import com.capstone.crm.entity.AppUser;
+import com.capstone.crm.entity.UserRole;
 import com.capstone.crm.repository.AppUserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,10 +45,17 @@ class RegistrationControllerTest {
                         .content(NEW_ACCOUNT))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.username").value("hopeful-agent"))
-                .andExpect(jsonPath("$.role").value("AGENT"))
-                .andExpect(jsonPath("$.enabled").value(false));
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
+                // The response carries no id and no timestamp. id is an identity
+                // column, so two registrations and a subtraction would tell an
+                // anonymous caller how many accounts exist.
+                .andExpect(jsonPath("$.id").doesNotExist())
+                .andExpect(jsonPath("$.createdAt").doesNotExist());
 
+        // Asserted against the stored row rather than the echoed body: what
+        // matters is what was persisted, not what the endpoint chose to say.
         AppUser saved = users.findByUsername("hopeful-agent").orElseThrow();
+        assertThat(saved.getRole()).isEqualTo(UserRole.AGENT);
         assertThat(saved.isEnabled()).isFalse();
         // The raw password must never be what is stored.
         assertThat(saved.getPasswordHash()).isNotEqualTo("correct-horse-battery");
@@ -80,8 +88,12 @@ class RegistrationControllerTest {
                                   "role": "ADMIN"
                                 }
                                 """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("AGENT"));
+                .andExpect(status().isCreated());
+
+        // The role a caller asked for is discarded, and the check is on the row.
+        AppUser saved = users.findByUsername("sneaky-user").orElseThrow();
+        assertThat(saved.getRole()).isEqualTo(UserRole.AGENT);
+        assertThat(saved.isEnabled()).isFalse();
     }
 
     @Test

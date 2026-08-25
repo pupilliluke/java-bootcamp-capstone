@@ -20,7 +20,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     long countByRoleAndEnabledTrue(UserRole role);
 
     // The approval queue: self-registered accounts start disabled, oldest first.
-    List<AppUser> findByEnabledFalseOrderByCreatedAtAsc();
+    // Scoped to a role on purpose. "Pending" means a self-service sign-up waiting
+    // for approval, and self-service sign-up only ever creates agents. Without the
+    // role in the query an ADMIN that somebody deliberately suspended is also
+    // disabled, so it would appear in the approval queue and the Approve button
+    // would quietly restore it.
+    List<AppUser> findByEnabledFalseAndRoleOrderByCreatedAtAsc(UserRole role);
 
     // Google sign-in resolves an account by the verified email on the ID token.
     Optional<AppUser> findByEmailIgnoreCase(String email);

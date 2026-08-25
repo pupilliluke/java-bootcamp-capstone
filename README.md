@@ -10,14 +10,14 @@ PostgreSQL for accounts.
 | --- | --- |
 | Front end | React and TypeScript, nine screens behind a login guard |
 | Backend | Spring Boot REST API, JWT authentication and roles, Kafka producer and consumer |
-| Database | PostgreSQL with Flyway. One table so far, `app_user` — customers are still in memory |
+| Database | PostgreSQL with Flyway for `app_user` and durable `interaction` rows; customers are still in memory |
 | Kafka messaging | Versioned interaction events, idempotent consumer processing, retry and dead-letter-topic configuration |
-| Tests | Unit tests for publishing and idempotency, an embedded Kafka integration test, and one that runs against real PostgreSQL |
+| Tests | Backend/frontend tests, embedded Kafka and real-PostgreSQL integration coverage, plus a Playwright browser journey |
 | Docs | Six planning documents in `docs/`, starting with `docs/backlog.md` |
 | Defense, reports | Directories reserved for project material |
 
-**What is not built yet:** customers and interactions are not saved anywhere, so
-both reset on restart. `docs/backlog.md` has the full picture and the plan.
+**What is not built yet:** customers still reset on restart. Interactions are
+stored durably and can be read back while their customer exists.
 
 ## Features
 
@@ -28,7 +28,7 @@ the customer data loaded with it.
 
 - Sign in, sign out, and a sidebar for moving between screens.
 - Dashboard, customer list with paging, customer details, and an add-customer form.
-- Log an interaction from the customer details screen.
+- Log an interaction and read its persisted history from the customer details screen.
 - Contacts, activities, and reports screens.
 
 Screens navigate through React state rather than a router library, which keeps
@@ -62,6 +62,8 @@ Customer data is stored in memory and resets when the application restarts.
 ### Kafka interaction messaging
 
 - Accept interaction requests through `POST /api/interactions`.
+- Save each accepted interaction before publishing its event.
+- Read a customer's interactions through `GET /api/customers/{customerId}/interactions`.
 - Create a Kafka event with a UUID event ID, interaction ID, event type, version, timestamp, customer ID, channel, and notes.
 - Publish events to the versioned topic `crm.interaction.v1`.
 - Use `customerId` as the Kafka message key to preserve ordering for one customer.
@@ -208,13 +210,14 @@ so the schema and every row go with it.
 | `GET` | `/api/customers` | List customers |
 | `GET` | `/api/customers/{customerId}` | Get one customer |
 | `POST` | `/api/customers` | Create a customer |
+| `PUT` | `/api/customers/{customerId}` | Update a customer |
+| `DELETE` | `/api/customers/{customerId}` | Soft-delete a customer (ADMIN only) |
 | `POST` | `/api/interactions` | Publish an interaction event |
+| `GET` | `/api/customers/{customerId}/interactions` | Read persisted interaction history |
 
-The interaction endpoint accepts `customerId`, `channel`, and `notes`. It returns `202 Accepted` with the created event.
-
-There is no `PUT` or `DELETE` for customers yet, and no `GET` to list a
-customer's interactions. Those gaps are why the front end disables editing and
-keeps its interaction timeline in local state.
+The interaction endpoint accepts `customerId`, `channel`, and `notes`. It saves
+the interaction, publishes the event, and returns `202 Accepted`. The customer
+details screen reads the resulting history from the nested GET endpoint.
 
 ## Test the project
 
@@ -237,6 +240,17 @@ For the final pre-push check:
 ```powershell
 .\mvnw clean verify
 ```
+
+Run the browser journey after starting PostgreSQL and Kafka with Docker Compose:
+
+```powershell
+cd frontend
+npm run test:e2e
+```
+
+Playwright starts Spring Boot and Vite, exercises login → create customer → log
+interaction → read back, and writes its HTML report to
+`frontend/playwright-report/`. Use `npm run test:e2e:report` to open it.
 
 ## Configuration
 
