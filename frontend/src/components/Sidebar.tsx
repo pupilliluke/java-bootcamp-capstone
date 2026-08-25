@@ -9,19 +9,78 @@ import {
   IconUsers,
 } from './icons'
 
-const ITEMS: { key: Page['name']; label: string; page: Page; Icon: (p: { className?: string }) => JSX.Element }[] = [
-  { key: 'dashboard', label: 'Dashboard', page: { name: 'dashboard' }, Icon: IconDashboard },
-  { key: 'customers', label: 'Customers', page: { name: 'customers' }, Icon: IconUsers },
-  { key: 'add', label: 'Add Customer', page: { name: 'add' }, Icon: IconUserPlus },
-  { key: 'contacts', label: 'Contacts', page: { name: 'contacts' }, Icon: IconContacts },
-  { key: 'activities', label: 'Activities', page: { name: 'activities' }, Icon: IconActivities },
-  { key: 'reports', label: 'Reports', page: { name: 'reports' }, Icon: IconReports },
-  { key: 'settings', label: 'Settings', page: { name: 'settings' }, Icon: IconSettings },
+type NavItem = {
+  key: Page['name']
+  label: string
+  page: Page
+  Icon: (props: { className?: string }) => JSX.Element
+  adminOnly?: boolean
+}
+
+const ITEMS: NavItem[] = [
+  {
+    key: 'dashboard',
+    label: 'Dashboard',
+    page: { name: 'dashboard' },
+    Icon: IconDashboard,
+  },
+  {
+    key: 'customers',
+    label: 'Customers',
+    page: { name: 'customers' },
+    Icon: IconUsers,
+  },
+  {
+    key: 'add',
+    label: 'Add Customer',
+    page: { name: 'add' },
+    Icon: IconUserPlus,
+  },
+  {
+    key: 'contacts',
+    label: 'Contacts',
+    page: { name: 'contacts' },
+    Icon: IconContacts,
+  },
+  {
+    key: 'activities',
+    label: 'Activities',
+    page: { name: 'activities' },
+    Icon: IconActivities,
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    page: { name: 'reports' },
+    Icon: IconReports,
+  },
+  {
+    key: 'admin-users',
+    label: 'User Management',
+    page: { name: 'admin-users' },
+    Icon: IconUsers,
+    adminOnly: true,
+  },
+  {
+    key: 'settings',
+    label: 'Settings',
+    page: { name: 'settings' },
+    Icon: IconSettings,
+  },
 ]
 
-export default function Sidebar({ current, navigate }: { current: Page['name']; navigate: Navigate }) {
+interface SidebarProps {
+  current: Page['name']
+  navigate: Navigate
+  isAdmin: boolean
+}
+
+export default function Sidebar({current, navigate, isAdmin, }: SidebarProps) {
   // The customer details screen belongs to the "Customers" section.
   const active = current === 'details' ? 'customers' : current
+  const visibleItems = ITEMS.filter(
+      (item) => !item.adminOnly || isAdmin,
+  )
 
   return (
     <aside className="sidebar">
@@ -30,7 +89,7 @@ export default function Sidebar({ current, navigate }: { current: Page['name']; 
         <span>Northstar CRM</span>
       </div>
       <nav className="nav">
-        {ITEMS.map(({ key, label, page, Icon }) => (
+        {visibleItems.map(({ key, label, page, Icon }) => (
           <button
             key={key}
             className={`nav-item${active === key ? ' active' : ''}`}

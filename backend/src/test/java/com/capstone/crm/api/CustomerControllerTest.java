@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,19 +40,36 @@ class CustomerControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // These two used to expect 403, on the reasoning that a token carrying an
+    // unknown role would authenticate and then be refused by the route rule.
+    // JwtAuthenticationFilter now loads the account from the database instead of
+    // trusting the token's claims, so "viewer1" — which is signed correctly but
+    // names nobody — never becomes an authenticated principal at all. 401 is the
+    // stronger answer: identity comes from the database, not from the bearer.
+    //
     @Test
-    void wrongRoleUpdateIsForbidden() throws Exception {
+    void updateWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
         mockMvc.perform(put("/api/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void wrongRoleDeleteIsForbidden() throws Exception {
+    void deleteWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
         mockMvc.perform(delete("/api/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER")))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // The difference between 401 and 403 in one pair of tests: agent1 is a real,
+    // enabled account and is told who they are — they simply may not do this.
+    // Deleting is admin-only; everything else on /api/customers is not.
+    @Test
+    void agentIsForbiddenFromDeletingACustomer() throws Exception {
+        mockMvc.perform(delete("/api/customers/CUS-1001")
+                        .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isForbidden());
     }
 
@@ -90,10 +108,102 @@ class CustomerControllerTest {
                 .andExpect(jsonPath("$.status").value("CLOSED"));
     }
 
+    // admin1, not agent1: authorization is checked before the controller runs, so
+    // an agent token would be refused with 403 and this would never reach the
+    // lookup it is meant to test.
     @Test
     void deletingAnUnknownCustomerIsNotFound() throws Exception {
         mockMvc.perform(delete("/api/customers/CUS-9999")
-                        .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
+                        .header("Authorization", "Bearer " + jwtService.issueToken("admin1", "ADMIN")))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- closing is ADMIN-only however you reach it ---------------------------
+    //
+    // delete() is a soft delete: it sets CLOSED and keeps the record. So the
+    // ADMIN rule on DELETE only holds if PUT cannot reach the same state, and
+    // before this it could — the edit form offers CLOSED in its status dropdown
+    // and any agent could pick it. These three pin the rule down: the transition
+    // is refused, an admin may make it, and an already-closed customer stays
+    // editable so the guard does not freeze the record.
+    //
+    // Each test makes its own customer. Customers are a real table now, shared by
+    // every test class in the JVM through the H2 database, so reusing CUS-1001
+    // would make the result depend on which test ran first.
+    @Test
+    void agentIsForbiddenFromClosingACustomerThroughUpdate() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer("CUS-7001", agent);
+
+        mockMvc.perform(put("/api/customers/CUS-7001")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("CUS-7001", "Case Study", "CLOSED")))
+                .andExpect(status().isForbidden())
+                // The body matters, not just the status: the edit form renders
+                // this string, so an agent sees why the save was refused rather
+                // than a form that silently does nothing.
+                .andExpect(jsonPath("$.message").value("Only an administrator can close a customer"));
+
+        mockMvc.perform(get("/api/customers/CUS-7001")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
+    @Test
+    void adminCanCloseACustomerThroughUpdate() throws Exception {
+        String admin = jwtService.issueToken("admin1", "ADMIN");
+        createCustomer("CUS-7002", admin);
+
+        mockMvc.perform(put("/api/customers/CUS-7002")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("CUS-7002", "Case Study", "CLOSED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    @Test
+    void agentCanStillEditACustomerThatIsAlreadyClosed() throws Exception {
+        String admin = jwtService.issueToken("admin1", "ADMIN");
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer("CUS-7003", admin);
+
+        mockMvc.perform(delete("/api/customers/CUS-7003")
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(put("/api/customers/CUS-7003")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("CUS-7003", "Renamed While Closed", "CLOSED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Renamed While Closed"))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+    }
+
+    // Emails are derived from the customer id rather than shared, because
+    // V3__customer.sql declares uq_customer_email. These customers used to live
+    // in a ConcurrentHashMap that had no opinion about duplicates; against a real
+    // table a shared address makes the second insert a 409.
+    private void createCustomer(String customerId, String token) throws Exception {
+        mockMvc.perform(post("/api/customers")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"%s","fullName":"Case Study","email":"%s",\
+                                "phone":"555-0000","status":"ACTIVE"}
+                                """.formatted(customerId, emailFor(customerId))))
+                .andExpect(status().isCreated());
+    }
+
+    private static String bodyWithStatus(String customerId, String fullName, String status) {
+        return """
+                {"fullName":"%s","email":"%s","phone":"555-0000","status":"%s"}
+                """.formatted(fullName, emailFor(customerId), status);
+    }
+
+    private static String emailFor(String customerId) {
+        return customerId.toLowerCase() + "@example.test";
     }
 }

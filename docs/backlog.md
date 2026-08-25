@@ -23,9 +23,10 @@ flowchart TB
   Worker -- "write audit row" --> DB
 ```
 
-**Every box already exists. The two arrows into the database do not.** Customers
-sit in memory and vanish on restart. Interactions are published to Kafka and
-never saved at all. That is the main gap.
+**Every box already exists.** Customers still sit in memory and vanish on
+restart. Interactions are now saved before their Kafka event is published and
+can be read back through the API; the customer persistence arrow remains the
+main data gap.
 
 The whole thing then runs as containers, deployed twice: to k3s on a laptop for
 the rubric, and to Azure for a live demo link.
@@ -40,10 +41,10 @@ into it. Neither `main` nor `develop` has the database work yet.
 | Login and roles | Done. Real JWT, users stored in PostgreSQL |
 | Front end | Nine screens, sidebar, sign-out. Three run on demo data |
 | Customers | Create, read, list. No update or delete. Lost on restart |
-| Interactions | Create only. Never saved, and no way to read them back |
+| Interactions | Create and customer-scoped read; saved before event publication |
 | Kafka | Sends and receives. The consumer only writes a log line |
-| Database | One table, `app_user` |
-| Containers, CI, Kubernetes | None |
+| Database | `app_user` and `interaction` tables managed by Flyway |
+| Containers, CI, Kubernetes | Image built and scanned on every PR; backend, frontend and Playwright E2E gates all run. Nothing deploys yet |
 | Deployed | Only the database, on Azure |
 
 ## Tables and screens: what exists, what has to be built
@@ -105,10 +106,10 @@ makes obvious:
 - **Every green screen except sign-in points at a table that does not exist.**
   Search, profile and add-a-customer all work against a `ConcurrentHashMap`, which
   is exactly why they empty out on restart.
-- **The orange ones are honest about themselves.** Logging an interaction posts
-  correctly and returns 202, but nothing is stored and there is no GET to read it
-  back, so the timeline only survives until you navigate away. Contacts,
-  activities and reports are Himank's mock screens — each one carries a
+- **Interaction history is now real.** Logging an interaction writes the row,
+  publishes the event, and the customer details screen reads it back after
+  remounting. Contacts, the global activities screen, and reports remain mock
+  screens — each one carries a
   "Demo data" tag in the UI because no endpoint exists behind it.
 
 Every dashed table is a full vertical slice, not just a migration:
@@ -117,7 +118,7 @@ Every dashed table is a full vertical slice, not just a migration:
 | ----- | ------ | ---------- | ------- | --- | --- | ------ |
 | `app_user` | yes | yes | yes | yes | login | login |
 | `customer` | plain class, not `@Entity` | in-memory map | create, get, list | yes | 3 routes of 6 | list, profile, add — edit disabled, no `PUT` to call |
-| `interaction` | none | none | publishes, never saves | request only | POST only | posts correctly, timeline is local state |
+| `interaction` | yes | JPA | saves then publishes; lists by customer | request + response | POST + nested GET | persisted history |
 | `account`, `address` | none | none | none | none | none | none |
 | `customer_status_history` | none | none | none | none | none | none |
 | `interaction_audit`, `processed_event` | none | in memory | consumer logs a line | none | none | none |
@@ -138,10 +139,11 @@ Three things that follow from the table:
 
 The order matters. Each line says why it sits where it does.
 
-**Phase 1 — Save the data.** Right now only `app_user` is a real table.
+**Phase 1 — Save the data.** `app_user` and `interaction` are real tables;
+customer persistence and durable consumer state remain.
 Concretely, this phase means:
 
-- `V2__customer.sql` and `V3__interaction.sql`, written in the same portable SQL
+- `V2__interaction.sql` is complete; add the customer migration next, written in the same portable SQL
   style as `V1__app_user.sql` so they run on PostgreSQL and on H2 under test
 - `Customer` becomes a JPA `@Entity`; `CustomerRepository` becomes a
   `JpaRepository<Customer, String>` instead of a `ConcurrentHashMap`
@@ -158,8 +160,8 @@ The entity and its migration must land in the same commit. `ddl-auto: validate`
 means the app refuses to start if they disagree — deliberately, but it surprises
 people who split the work.
 
-**Phase 2 — Set up the pipeline.** It needs
-nothing from anyone else, so it can start today.
+**Phase 2 — Set up the pipeline.** Complete: backend, frontend, and the browser
+journey run as separate CI gates with failure artifacts.
 
 **Phase 3 — Finish CRUD.** Update, delete, and list interactions, with screens
 for each. Needs Phase 1.

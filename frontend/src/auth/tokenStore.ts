@@ -1,4 +1,8 @@
-export type SessionUser = { username: string; role: string }
+import type { UserRole } from '../types/user'
+
+export type SessionUser = {
+  username: string; role: UserRole;
+}
 
 // Deliberately in memory, not localStorage: a token in localStorage is readable
 // by any script on the page, so an XSS becomes a stolen session. The cost is

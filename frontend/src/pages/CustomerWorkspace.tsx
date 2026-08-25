@@ -10,6 +10,8 @@ import ContactsPage from './ContactsPage'
 import ActivitiesPage from './ActivitiesPage'
 import ReportsPage from './ReportsPage'
 import SettingsPage from './SettingsPage'
+import AdminOnly from '../auth/AdminOnly'
+import AdminUsersPage from './AdminUsersPage'
 
 // The full Customer Management UI, mounted only behind ProtectedRoute. Everything
 // here lives inside the guard so signing out unmounts it (and any loaded customer
@@ -21,13 +23,14 @@ export default function CustomerWorkspace() {
   const { state, logout } = useAuth()
   const [page, setPage] = useState<Page>({ name: 'dashboard' })
   const [reloadKey, setReloadKey] = useState(0)
+    const isAdmin = state.status === 'authenticated' && state.user.role === 'ADMIN'
 
   const navigate = (p: Page) => setPage(p)
   const refresh = () => setReloadKey((k) => k + 1)
 
   return (
     <div className="app-shell">
-      <Sidebar current={page.name} navigate={navigate} />
+      <Sidebar current={page.name} navigate={navigate} isAdmin={isAdmin} />
       <main className="workspace">
         {state.status === 'authenticated' && (
           <div className="topbar">
@@ -47,6 +50,7 @@ export default function CustomerWorkspace() {
         {page.name === 'contacts' && <ContactsPage />}
         {page.name === 'activities' && <ActivitiesPage navigate={navigate} />}
         {page.name === 'reports' && <ReportsPage />}
+          {page.name === 'admin-users' && (<AdminOnly> <AdminUsersPage /> </AdminOnly>)}
         {page.name === 'settings' && <SettingsPage />}
       </main>
     </div>
