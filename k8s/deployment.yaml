@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-api
+  namespace: crm
+  labels:
+    app: crm-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crm-api
+  template:
+    metadata:
+      labels:
+        app: crm-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: crm-api
+          # A tag for local iteration; a digest for anything that is being
+          # graded or promoted. A tag is a mutable pointer -- rebuild and push
+          # the same tag and this Deployment silently means something else,
+          # which is precisely what "immutable image digest" rules out.
+          #
+          # Get the digest after building, then pin it here:
+          #   docker image inspect crm-api:dev --format '{{index .RepoDigests 0}}'
+          #   image: crm-api@sha256:<digest>
+          #
+          # For k3d the image has to be inside the cluster first:
+          #   k3d image import crm-api:dev -c <cluster>
+          image: crm-api:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: crm-api-config
+            - secretRef:
+                name: crm-api-secrets
+              # Create that Secret out-of-band (GUIDE Step 2). Never apply secret.example.yaml.
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          # Three probes, each answering a different question.
+          #
+          # Startup uses readiness because Flyway runs before the app can serve,
+          # and 30 x 5s gives it 150 seconds before anything gives up. Liveness
+          # deliberately does NOT point at readiness: a database blip should take
+          # the pod out of rotation, not restart a process that is working fine.
+          #
+          # Worth knowing: readiness currently reports UP even with PostgreSQL
+          # unreachable, because the readiness group contains only readinessState.
+          # Until application.yml adds db to that group, this probe proves the
+          # process answers rather than that it can serve -- and Kubernetes will
+          # happily send traffic to a pod that cannot reach its database.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
