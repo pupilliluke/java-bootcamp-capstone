@@ -34,6 +34,19 @@ const statusBox = (name: RegExp) =>
 
 const rows = () => screen.getAllByRole('row').length - 1 // minus the header row
 
+// PAGE_SIZE is 8, so a roster of four can never paginate. Pagination behaviour
+// needs a list long enough to have a second page: 10 ACTIVE plus one CLOSED, so
+// filtering to CLOSED from page 2 collapses the result to a single page.
+const bigRoster = [
+  ...Array.from({ length: 10 }, (_, i) => ({
+    ...customer,
+    customerId: `CUS-2${String(i).padStart(3, '0')}`,
+    fullName: `Active Number ${i}`,
+    status: 'ACTIVE' as const,
+  })),
+  { ...customer, customerId: 'CUS-3001', fullName: 'Closed Chris', status: 'CLOSED' as const },
+]
+
 beforeEach(() => vi.clearAllMocks())
 
 describe('CustomerListPage', () => {
@@ -107,6 +120,46 @@ describe('CustomerListPage', () => {
 
       expect(statusBox(/^all$/i)).toBeChecked()
       expect(rows()).toBe(4)
+    })
+
+    // Without the setPage(1) calls in showAll/toggle, this strands the user on
+    // a page the filtered list no longer has, and the table renders empty.
+    it('returns to page 1 when the filter changes', async () => {
+      mockUseCustomers.mockReturnValue({ customers: bigRoster, loading: false, error: null })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(screen.getByRole('button', { name: '2' }))
+      expect(screen.getByText('Closed Chris')).toBeInTheDocument() // 11th row, page 2
+
+      await user.click(statusBox(/^active$/i))
+
+      expect(screen.getByRole('button', { name: '1' })).toHaveClass('active')
+      expect(screen.getByText('Active Number 0')).toBeInTheDocument()
+      expect(rows()).toBe(8)
+    })
+
+    // The pager and the table must agree about which page is showing, even when
+    // the list shrinks underneath the current page without a filter change.
+    it('keeps the table and the pager on the same page when the list shrinks', async () => {
+      mockUseCustomers.mockReturnValue({ customers: bigRoster, loading: false, error: null })
+      const user = userEvent.setup()
+      const { rerender } = renderPage()
+
+      await user.click(screen.getByRole('button', { name: '2' }))
+      expect(rows()).toBe(3)
+
+      // A refetch returns a shorter list — one page's worth — while the user is
+      // still on page 2.
+      mockUseCustomers.mockReturnValue({
+        customers: bigRoster.slice(0, 3),
+        loading: false,
+        error: null,
+      })
+      rerender(<CustomerListPage navigate={navigate} reloadKey={1} />)
+
+      expect(screen.queryByText(/no customers match/i)).not.toBeInTheDocument()
+      expect(rows()).toBe(3)
     })
   })
 })

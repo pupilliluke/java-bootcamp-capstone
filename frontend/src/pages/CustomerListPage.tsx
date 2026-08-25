@@ -54,10 +54,14 @@ export default function CustomerListPage({
     })
   }, [customers, query, selected])
 
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  // keep page in range when filters shrink the list
-  const safePage = pageRows.length === 0 && page > 1 ? 1 : page
+  // Clamped before slicing, not after. The previous version derived a safePage
+  // for the pager while the table kept slicing with the raw `page`, so a list
+  // that shrank underneath a page > 1 — an admin closes customers and the
+  // refetch returns fewer rows — showed "No customers match your search" while
+  // the pager highlighted page 1 and reported "Showing 1 to 8 of N entries".
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount)
+  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   return (
     <div>
