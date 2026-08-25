@@ -17,7 +17,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,19 +32,32 @@ public class CustomerService {
         this.customerRepository = customerRepository;
     }
 
+    // Ids are canonicalised here, at the only door into the repository, and
+    // ck_customer_id_upper in V3__customer.sql backs it up. A primary key is
+    // case-sensitive, so without this "cus-1006" and "CUS-1006" are separate
+    // customers that look identical to a person reading the screen.
+    //
+    // Trimmed as well as upper-cased: a trailing space is the same class of
+    // invisible difference, and pasting an id into a form is how it gets there.
+    private static String canonical(String customerId) {
+        return customerId == null ? null : customerId.trim().toUpperCase();
+    }
+
     public CustomerResponseDTO create(CustomerRequestDTO request) {
-        if (customerRepository.existsById(request.customerId())) {
-            throw new DuplicateCustomerException("Duplicate customer: " + request.customerId());
+        String customerId = canonical(request.customerId());
+        if (customerRepository.existsById(customerId)) {
+            throw new DuplicateCustomerException("Duplicate customer: " + customerId);
         }
         Customer customer = CustomerMapper.toEntity(request);
-        customer.setCreatedAt(LocalDateTime.now());
+        customer.setCustomerId(customerId);
+        customer.setCreatedAt(Instant.now());
         Customer saved = customerRepository.save(customer);
         log.info("Created customer {}", saved.getCustomerId());
         return CustomerMapper.toResponse(saved);
     }
 
     public CustomerResponseDTO get(String customerId) {
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         return CustomerMapper.toResponse(customer);
     }
@@ -56,7 +69,7 @@ public class CustomerService {
     }
 
     public CustomerResponseDTO update(String customerId, CustomerUpdateDTO request) {
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         CustomerStatus previousStatus = customer.getStatus();
 
@@ -93,7 +106,7 @@ public class CustomerService {
     }
 
     public void delete(String customerId) {     //soft delete. just set to closed
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         customer.setStatus(CustomerStatus.CLOSED);
         customerRepository.save(customer);

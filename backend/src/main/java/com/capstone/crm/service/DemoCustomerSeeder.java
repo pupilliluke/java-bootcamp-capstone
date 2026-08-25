@@ -9,7 +9,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 //TODO: demo records only. Replace with real customer onboarding before any
 // deployment that is not a training environment.
@@ -36,7 +36,7 @@ public class DemoCustomerSeeder implements ApplicationRunner {
         if (customerRepository.existsById(customerId)) {
             return;
         }
-        customerRepository.save(new Customer(customerId, fullName, email, phone, status, LocalDateTime.now()));
+        customerRepository.save(new Customer(customerId, fullName, email, phone, status, Instant.now()));
         log.info("Seeded demo customer {}", customerId);
     }
 }

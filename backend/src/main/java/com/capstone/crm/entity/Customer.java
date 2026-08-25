@@ -7,7 +7,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Objects;
 
 @Entity
@@ -32,12 +32,12 @@ public class Customer {
     private CustomerStatus status;
 
     @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     public Customer() {}
 
     public Customer(String customerId, String fullName, String email, String phone,
-                    CustomerStatus status, LocalDateTime createdAt) {
+                    CustomerStatus status, Instant createdAt) {
         this.customerId = customerId;
         this.fullName = fullName;
         this.email = email;
@@ -48,12 +48,12 @@ public class Customer {
 
     public static Customer amina() {        //test customers
         return new Customer("CUS-1001", "Amina Khan", "amina.khan@example.com", null,
-                CustomerStatus.ACTIVE, LocalDateTime.now());
+                CustomerStatus.ACTIVE, Instant.now());
     }
 
     public static Customer ravi() {
         return new Customer("CUS-1002", "Ravi Singh", "ravi.singh@example.com", null,
-                CustomerStatus.PROSPECT, LocalDateTime.now());
+                CustomerStatus.PROSPECT, Instant.now());
     }
 
     public String getCustomerId() { return customerId; }
@@ -66,8 +66,8 @@ public class Customer {
     public void setPhone(String phone) { this.phone = phone; }
     public CustomerStatus getStatus() { return status; }
     public void setStatus(CustomerStatus status) { this.status = status; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
     @Override
     public boolean equals(Object o) {

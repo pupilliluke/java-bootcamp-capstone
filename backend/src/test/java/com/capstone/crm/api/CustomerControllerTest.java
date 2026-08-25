@@ -182,6 +182,54 @@ class CustomerControllerTest {
                 .andExpect(jsonPath("$.status").value("CLOSED"));
     }
 
+    // --- customer ids are canonically upper case ------------------------------
+    //
+    // customer_id is a case-sensitive primary key, so "cus-8001" and "CUS-8001"
+    // would otherwise be two customers that look like one on screen — and
+    // interaction rows key off the same value, so history would split between
+    // them. CustomerService upper-cases on the way in; ck_customer_id_upper in
+    // V3__customer.sql is the backstop if anything ever bypasses it.
+    @Test
+    void aLowerCaseCustomerIdIsStoredAndAddressableInUpperCase() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+
+        mockMvc.perform(post("/api/customers")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"cus-8001","fullName":"Lower Case","email":"cus-8001@example.test",\
+                                "phone":"555-0000","status":"ACTIVE"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
+
+        // Reachable by either spelling, and it is the same single record.
+        mockMvc.perform(get("/api/customers/cus-8001")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
+
+        mockMvc.perform(get("/api/customers/CUS-8001")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
+    }
+
+    @Test
+    void theSameIdInAnotherCaseIsADuplicateRatherThanASecondCustomer() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer("CUS-8002", agent);
+
+        mockMvc.perform(post("/api/customers")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"cus-8002","fullName":"Case Twin","email":"twin@example.test",\
+                                "phone":"555-0000","status":"ACTIVE"}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
     // Emails are derived from the customer id rather than shared, because
     // V3__customer.sql declares uq_customer_email. These customers used to live
     // in a ConcurrentHashMap that had no opinion about duplicates; against a real
