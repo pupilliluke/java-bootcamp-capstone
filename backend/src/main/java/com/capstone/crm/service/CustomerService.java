@@ -9,6 +9,8 @@ import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
 import com.capstone.crm.exception.DuplicateCustomerException;
 import com.capstone.crm.repository.CustomerRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -17,6 +19,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class CustomerService {
+
+    private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
     private final CustomerRepository customerRepository;
 
@@ -31,6 +35,7 @@ public class CustomerService {
         Customer customer = CustomerMapper.toEntity(request);
         customer.setCreatedAt(LocalDateTime.now());
         Customer saved = customerRepository.save(customer);
+        log.info("Created customer {}", saved.getCustomerId());
         return CustomerMapper.toResponse(saved);
     }
 
@@ -49,8 +54,10 @@ public class CustomerService {
     public CustomerResponseDTO update(String customerId, CustomerUpdateDTO request) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
+        CustomerStatus previousStatus = customer.getStatus();
         CustomerMapper.applyUpdate(customer, request);
         Customer saved = customerRepository.save(customer);
+        log.info("Updated customer {} (status {} -> {})", customerId, previousStatus, saved.getStatus());
         return CustomerMapper.toResponse(saved);
     }
 
@@ -59,5 +66,6 @@ public class CustomerService {
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         customer.setStatus(CustomerStatus.CLOSED);
         customerRepository.save(customer);
+        log.info("Closed customer {}", customerId);
     }
 }
