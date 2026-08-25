@@ -3,6 +3,11 @@
 What the system is today, not what it is planned to become. Anything not yet
 built is listed under [Gaps](#gaps) rather than drawn as if it exists.
 
+Start with the [system context view](architecture/context.md) for the CRM as one
+box, its external participants, and its trust boundaries. The views below open
+that box to show its containers, request paths, messaging, persistence, and
+deployment.
+
 ## Container view
 
 ```mermaid
