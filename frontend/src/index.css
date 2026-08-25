@@ -401,6 +401,36 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .form-field { display: flex; flex-direction: column; gap: 0.35rem; }
 .form-field.full { grid-column: 1 / -1; }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  align-self: end;
+  gap: 0.5rem;
+  min-height: 38px;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.admin-form-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.btn-danger {
+  background: #fff;
+  color: var(--red);
+  border-color: #f2b8b5;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--red-soft);
+}
+
 /* ============ KPI tiles ============ */
 .kpi-row {
   display: grid;
