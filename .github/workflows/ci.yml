@@ -263,6 +263,30 @@ jobs:
   # Lab 43's second idea: build the artifact once, and give it an identity that
   # can be traced back to the commit it came from. Only on develop and main —
   # a pull request has nothing worth keeping.
+  # Schema-validates k8s/ against the Kubernetes API. No cluster involved, which
+  # is the point -- YAML parsing proves a file is well formed, not that the
+  # fields exist. A misspelled probe field or an apiVersion removed two releases
+  # ago parses perfectly and fails at `kubectl apply`, which during a demo means
+  # in front of people.
+  #
+  # Verified failable rather than assumed: renaming failureThreshold to
+  # failureThresold gave "additional properties 'failureThresold' not allowed"
+  # and exit 1; downgrading the Ingress to networking.k8s.io/v1beta1 gave "could
+  # not find schema for Ingress" and exit 1.
+  manifests:
+    name: manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the version the k3d cluster actually runs, so a field valid on
+      # a newer API but absent here is caught rather than waved through.
+      # -strict rejects unknown fields; without it a typo is silently ignored.
+      - name: Validate the Kubernetes manifests
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz             | tar -xz kubeconform
+          ./kubeconform -strict -summary -kubernetes-version 1.28.15 k8s/
+
   package:
     name: package
     needs: [backend, frontend]

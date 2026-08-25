@@ -6,24 +6,64 @@ the bottom rather than described from memory.
 
 ## Known-good identity
 
-Recorded **before** a deploy, not looked up during an incident. Update this table
-as part of promoting, or it is worth nothing when it matters.
+Recorded **before** a deploy, not looked up during an incident. Capture happens
+on every build; a digest written down after something breaks is a digest for the
+version that broke.
 
 | Field | Value |
 | ----- | ----- |
 | Cluster | `k3d-lab42`, namespace `crm` |
 | Deployment | `crm-api` |
-| Image | `crm-api:dev` |
-| Revision label | `a66237c06d3fd977d05411af7c97998b7fc63447` (`org.opencontainers.image.revision`) |
+| Tag deployed | `crm-api:dev` |
+| **Digest** | `sha256:ebfe1486a16d77a6dedc0c5f8ed92eec56618f55fd1cdf53d789667d016e69b2` |
+| Commit | `5f1bb6d8013f204db7fd5965d6604352ba5fd889` (`org.opencontainers.image.revision`) |
 | Ingress | `crm-api.localtest.me` via Traefik on `:8088` |
 | Verification | readiness, then login, then an authenticated `GET /api/customers` |
 
-The image label is how a running pod is traced back to a commit:
+The digest is the row that earns this table. Rolling back to "the previous tag"
+is not a thing that exists — the tag moved, and what it used to point at may be
+untagged or gone. Rolling back to a recorded digest is one command.
+
+A digest with no commit beside it is only half an answer: it says what ran, not
+what it was built from. Capture both together:
 
 ```
-kubectl -n crm get deploy crm-api -o jsonpath='{.spec.template.spec.containers[0].image}'
+docker image inspect crm-api:dev --format '{{.Id}}'
 docker image inspect crm-api:dev --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
+
+`.Id` rather than `.RepoDigests` because nothing is pushed to a registry yet. Once
+images are pushed, `{{index .RepoDigests 0}}` is the value to record and the
+Deployment can pin `crm-api@sha256:...` directly instead of a tag.
+
+One thing to know before trusting a digest against this cluster: `k3d image
+import` loads into containerd, which computes its own image ID. Docker reports
+`sha256:ebfe1486...` for the build the pod is running, while the pod itself
+reports `sha256:628d95bd...`. They refer to the same bits; they are not the same
+string, so compare like with like.
+
+Tag scheme, three tags on one build:
+
+| Tag | Purpose |
+| --- | --- |
+| `crm-api:dev` | the name a human types |
+| `crm-api:0.0.1-SNAPSHOT` | matches the Maven version in `pom.xml` |
+| `crm-api:<git-sha>` | ties the image to the commit that produced it |
+
+## What is checked automatically, and what is not
+
+The manifests are schema-validated in CI by the `manifests` job -- `kubeconform
+-strict`, pinned to the Kubernetes version the cluster runs. That catches a
+misspelled field or a retired `apiVersion` before anyone applies them. It was
+checked against deliberate breakage rather than assumed: renaming
+`failureThreshold` to `failureThresold` and downgrading the Ingress to
+`networking.k8s.io/v1beta1` both fail the job.
+
+Nothing beyond that is automated. There is no cluster in CI, so whether the pod
+actually becomes ready, serves through the ingress, and recovers from a bad
+deploy is established by running it -- the rehearsal at the bottom of this file
+is that evidence, and it is the reason the rehearsal has to be repeated when the
+manifests change rather than treated as a one-off.
 
 ## Triggers
 
