@@ -1,0 +1,29 @@
+# This governs the build CONTEXT, not COPY. Everything under backend/ is
+# packaged and sent to the Docker daemon before the first instruction runs, so
+# excluding a file here is stronger than merely declining to COPY it: an excluded
+# file never leaves the machine, and cannot end up in an image layer by accident.
+
+# 75 MB of build output, and the jar the image builds for itself anyway.
+target/
+
+# Secrets. .env is gitignored, which says nothing about Docker - without this
+# line a local .env would be shipped into the context and readable by any
+# instruction in the build.
+.env
+.env.*
+!.env.example
+
+# Evidence and reports, including Dependency-Check output.
+reports/
+*.log
+dependency-check-suppressions.xml
+
+# Editor and OS noise.
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Kept in the context deliberately: pom.xml, src/, mvnw and .mvn — the build
+# stage needs all four, and dropping any of them breaks the first COPY rather
+# than merely slowing the build down.
