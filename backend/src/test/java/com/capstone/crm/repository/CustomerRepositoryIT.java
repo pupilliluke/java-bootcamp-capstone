@@ -55,7 +55,7 @@ class CustomerRepositoryIT {
     @Test
     void flywayAppliedTheCustomerMigrationToRealPostgres() {
         Integer applied = jdbc.queryForObject(
-                "SELECT count(*) FROM flyway_schema_history WHERE script = 'V2__customer.sql' AND success = true",
+                "SELECT count(*) FROM flyway_schema_history WHERE script = 'V3__customer.sql' AND success = true",
                 Integer.class);
 
         assertThat(applied).isEqualTo(1);
