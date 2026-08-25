@@ -7,7 +7,10 @@ import Pagination from '../components/Pagination'
 import { IconEdit, IconEye, IconSearch, IconUserPlus } from '../components/icons'
 
 const PAGE_SIZE = 8
-const STATUSES: (CustomerStatus | 'ALL')[] = ['ALL', 'ACTIVE', 'PROSPECT', 'SUSPENDED', 'CLOSED']
+const STATUSES: CustomerStatus[] = ['ACTIVE', 'PROSPECT', 'SUSPENDED', 'CLOSED']
+
+// Title-case a status for the checkbox label: ACTIVE -> Active.
+const label = (s: string) => s.charAt(0) + s.slice(1).toLowerCase()
 
 export default function CustomerListPage({
   navigate,
@@ -18,8 +21,25 @@ export default function CustomerListPage({
 }) {
   const { customers, loading, error } = useCustomers(reloadKey)
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<CustomerStatus | 'ALL'>('ALL')
+  // An empty set means "no status filter" — i.e. All. Selecting any status
+  // narrows to just the checked ones; clearing them all falls back to All.
+  const [selected, setSelected] = useState<Set<CustomerStatus>>(new Set())
   const [page, setPage] = useState(1)
+
+  function showAll() {
+    setSelected(new Set())
+    setPage(1)
+  }
+
+  function toggle(status: CustomerStatus) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+    setPage(1)
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -29,10 +49,10 @@ export default function CustomerListPage({
         c.fullName.toLowerCase().includes(q) ||
         c.customerId.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q)
-      const matchesS = status === 'ALL' || c.status === status
+      const matchesS = selected.size === 0 || selected.has(c.status)
       return matchesQ && matchesS
     })
-  }, [customers, query, status])
+  }, [customers, query, selected])
 
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -61,20 +81,24 @@ export default function CustomerListPage({
               }}
             />
           </div>
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value as CustomerStatus | 'ALL')
-              setPage(1)
-            }}
-            style={{ width: 'auto' }}
-          >
+
+          <div className="status-filter" role="group" aria-label="Filter by status">
+            <span className="label">Status:</span>
+            <label className="status-check">
+              <input type="checkbox" checked={selected.size === 0} onChange={showAll} />
+              All
+            </label>
             {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s === 'ALL' ? 'All statuses' : s}
-              </option>
+              <label key={s} className="status-check">
+                <input
+                  type="checkbox"
+                  checked={selected.has(s)}
+                  onChange={() => toggle(s)}
+                />
+                {label(s)}
+              </label>
             ))}
-          </select>
+          </div>
         </div>
 
         {loading && <div className="spinner-row">Loading customers…</div>}

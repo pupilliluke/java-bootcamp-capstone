@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useCustomer } from '../hooks/useCustomer'
 import { interactionsApi } from '../api/interactions'
 import { ApiError } from '../api/ApiError'
+import { customersApi } from '../api/customers'
+import AdminOnly from '../auth/AdminOnly'
 import type { Channel, Interaction } from '../types/customer'
 import type { Navigate } from '../nav'
 import StatusBadge from '../components/StatusBadge'
@@ -29,6 +31,30 @@ export default function CustomerDetailsPage({
   const [saving, setSaving] = useState(false)
   const [recorded, setRecorded] = useState<Interaction[]>([])
   const [note, setNote] = useState('')
+
+  // Closing a customer is ADMIN-only. The button is hidden for agents, and the API
+  // refuses them independently — the hidden control is convenience, not the guard.
+  const [closing, setClosing] = useState(false)
+  const [closeError, setCloseError] = useState<string | null>(null)
+
+  async function handleClose() {
+    if (!customer) return
+    const confirmed = window.confirm(
+      `Close customer "${customer.fullName}" (${customer.customerId})? Their status becomes CLOSED. The record is kept and an admin can reopen it by editing the status.`,
+    )
+    if (!confirmed) return
+
+    setClosing(true)
+    setCloseError(null)
+    try {
+      await customersApi.remove(customer.customerId)
+      // The list refetches on remount, so the row shows its CLOSED status.
+      navigate({ name: 'customers' })
+    } catch (err) {
+      setCloseError(err instanceof ApiError ? err.message : 'Could not close customer')
+      setClosing(false)
+    }
+  }
 
   async function recordInteraction(e: React.FormEvent) {
     e.preventDefault()
@@ -67,8 +93,16 @@ export default function CustomerDetailsPage({
       <button className="crumb" onClick={() => navigate({ name: 'customers' })}>← Back to List</button>
       <div className="page-header">
         <h1>Customer Details</h1>
-        <button className="btn-primary" onClick={() => navigate({ name: 'add', edit: customer })}>Edit</button>
+        <div className="actions-row">
+          <button className="btn-primary" onClick={() => navigate({ name: 'add', edit: customer })}>Edit</button>
+          <AdminOnly fallback={null}>
+            <button className="btn-danger" onClick={handleClose} disabled={closing}>
+              {closing ? 'Closing…' : 'Close'}
+            </button>
+          </AdminOnly>
+        </div>
       </div>
+      {closeError && <p className="error" role="alert">{closeError}</p>}
 
       <div className="card">
         <div className="profile-head">

@@ -597,3 +597,30 @@ table.data tbody tr:last-child td { border-bottom: none; }
   .two-col, .form-grid, .chart-grid, .reports-layout, .kpi-row { grid-template-columns: 1fr; }
   .workspace { padding: 1rem; }
 }
+
+/* ============ status filter (customer list) ============ */
+.status-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+.status-filter .label {
+  color: var(--muted);
+  font-weight: 600;
+}
+.status-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+/* the global input rule forces width:100%; checkboxes must stay their own size */
+.status-check input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  cursor: pointer;
+}

@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import CustomerListPage from './CustomerListPage'
 import { useCustomers } from '../hooks/useCustomers'
@@ -18,6 +19,20 @@ const customer = {
   phone: '555-0101',
   status: 'ACTIVE' as const,
 }
+
+// A spread of statuses for the filter tests.
+const roster = [
+  { ...customer, customerId: 'CUS-1001', fullName: 'Active Andy', status: 'ACTIVE' as const },
+  { ...customer, customerId: 'CUS-1002', fullName: 'Prospect Pia', status: 'PROSPECT' as const },
+  { ...customer, customerId: 'CUS-1003', fullName: 'Suspended Sam', status: 'SUSPENDED' as const },
+  { ...customer, customerId: 'CUS-1004', fullName: 'Closed Chris', status: 'CLOSED' as const },
+]
+
+// The status checkbox, found by its accessible label ("Active", "Closed", ...).
+const statusBox = (name: RegExp) =>
+  within(screen.getByRole('group', { name: /filter by status/i })).getByRole('checkbox', { name })
+
+const rows = () => screen.getAllByRole('row').length - 1 // minus the header row
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -45,5 +60,53 @@ describe('CustomerListPage', () => {
     renderPage()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()
     expect(screen.getByText('CUS-1001')).toBeInTheDocument()
+  })
+
+  // --- multi-status checkbox filter --------------------------------------
+  describe('status filter', () => {
+    beforeEach(() => {
+      mockUseCustomers.mockReturnValue({ customers: roster, loading: false, error: null })
+    })
+
+    it('shows every status by default, with "All" checked', () => {
+      renderPage()
+      expect(statusBox(/^all$/i)).toBeChecked()
+      expect(rows()).toBe(4)
+    })
+
+    it('narrows to a single checked status', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await user.click(statusBox(/^active$/i))
+
+      expect(screen.getByText('Active Andy')).toBeInTheDocument()
+      expect(screen.queryByText('Prospect Pia')).not.toBeInTheDocument()
+      expect(rows()).toBe(1)
+      // Selecting a specific status clears the "All" checkbox.
+      expect(statusBox(/^all$/i)).not.toBeChecked()
+    })
+
+    it('shows the union of several checked statuses', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await user.click(statusBox(/^active$/i))
+      await user.click(statusBox(/^closed$/i))
+
+      expect(screen.getByText('Active Andy')).toBeInTheDocument()
+      expect(screen.getByText('Closed Chris')).toBeInTheDocument()
+      expect(screen.queryByText('Prospect Pia')).not.toBeInTheDocument()
+      expect(rows()).toBe(2)
+    })
+
+    it('falls back to All when the last status is unchecked', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await user.click(statusBox(/^active$/i)) // narrow to 1
+      expect(rows()).toBe(1)
+      await user.click(statusBox(/^active$/i)) // uncheck it again
+
+      expect(statusBox(/^all$/i)).toBeChecked()
+      expect(rows()).toBe(4)
+    })
   })
 })
