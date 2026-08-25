@@ -235,4 +235,55 @@ class AdminUserServiceTest {
     private AppUser user(String username, String email, String passwordHash, UserRole role) {
         return new AppUser(username, email, passwordHash, role);
     }
+
+    // The approval queue is defined by role as well as state. A suspended ADMIN
+    // is also disabled, and if it appeared here the Approve button would offer
+    // to reinstate an administrator that somebody deliberately switched off.
+    @Test
+    void listPendingAsksOnlyForDisabledAgents() {
+        when(userRepository.findByEnabledFalseAndRoleOrderByCreatedAtAsc(UserRole.AGENT))
+                .thenReturn(List.of());
+
+        service.listPending();
+
+        verify(userRepository).findByEnabledFalseAndRoleOrderByCreatedAtAsc(UserRole.AGENT);
+    }
+
+    @Test
+    void approvingADisabledAgentEnablesIt() {
+        AppUser pending = new AppUser("newcomer", "newcomer@example.test", "hash", UserRole.AGENT);
+        pending.setEnabled(false);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(pending));
+        when(userRepository.save(any(AppUser.class))).thenAnswer(call -> call.getArgument(0));
+
+        UserResponse response = service.enable(7L, "admin1");
+
+        assertThat(response.enabled()).isTrue();
+    }
+
+    // Reinstating an administrator is a different decision with different
+    // consequences, and it belongs in the user editor where the actor has to
+    // choose the role explicitly.
+    @Test
+    void approvingASuspendedAdministratorIsRefused() {
+        AppUser suspended = new AppUser("locked-admin", "locked@example.test", "hash", UserRole.ADMIN);
+        suspended.setEnabled(false);
+        when(userRepository.findById(9L)).thenReturn(Optional.of(suspended));
+
+        assertThatThrownBy(() -> service.enable(9L, "admin1"))
+                .isInstanceOf(SelfUserModificationException.class);
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void approvingAnAlreadyEnabledAgentIsANoOp() {
+        AppUser live = new AppUser("already-on", "already-on@example.test", "hash", UserRole.AGENT);
+        when(userRepository.findById(3L)).thenReturn(Optional.of(live));
+
+        UserResponse response = service.enable(3L, "admin1");
+
+        assertThat(response.enabled()).isTrue();
+        verify(userRepository, never()).save(any());
+    }
 }

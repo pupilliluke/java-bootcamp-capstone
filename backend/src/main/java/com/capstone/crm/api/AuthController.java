@@ -2,11 +2,16 @@ package com.capstone.crm.api;
 
 import com.capstone.crm.api.dto.LoginRequestDTO;
 import com.capstone.crm.api.dto.LoginResponseDTO;
+import com.capstone.crm.api.dto.RegisterRequest;
+import com.capstone.crm.api.dto.RegistrationResponse;
+import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.exception.InvalidCredentialsException;
 import com.capstone.crm.security.JwtService;
+import com.capstone.crm.service.RegistrationService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,12 +30,26 @@ public class AuthController {
 
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final RegistrationService registrationService;
 
     public AuthController(
             JwtService jwtService,
-            AuthenticationManager authenticationManager) {
+            AuthenticationManager authenticationManager,
+            RegistrationService registrationService) {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
+        this.registrationService = registrationService;
+    }
+
+    /**
+     * Public sign-up. Returns 201 with the created account so the caller can see
+     * {@code enabled: false} — the account exists but cannot sign in until an
+     * administrator approves it.
+     */
+    @PostMapping("/register")
+    public ResponseEntity<RegistrationResponse> register(@Valid @RequestBody RegisterRequest request) {
+        RegistrationResponse created = registrationService.register(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PostMapping("/login")
