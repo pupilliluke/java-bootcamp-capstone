@@ -44,7 +44,7 @@ into it. Neither `main` nor `develop` has the database work yet.
 | Interactions | Create and customer-scoped read; saved before event publication |
 | Kafka | Sends and receives. The consumer only writes a log line |
 | Database | `app_user` and `interaction` tables managed by Flyway |
-| Containers, CI, Kubernetes | CI includes backend, frontend, and Playwright E2E gates; deployment work remains |
+| Containers, CI, Kubernetes | Image built and scanned on every PR; backend, frontend and Playwright E2E gates all run. Nothing deploys yet |
 | Deployed | Only the database, on Azure |
 
 ## Tables and screens: what exists, what has to be built

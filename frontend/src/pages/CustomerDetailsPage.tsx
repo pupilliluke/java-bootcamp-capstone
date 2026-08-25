@@ -37,7 +37,15 @@ export default function CustomerDetailsPage({
     setInteractions([])
     interactionsApi
       .list(customerId, ctrl.signal)
-      .then(setInteractions)
+      .then((loaded) => {
+        // Merged, not assigned. A list request still in flight when an
+        // interaction is recorded resolves afterwards, and replacing the array
+        // wholesale would drop the row the user just saved.
+        setInteractions((prev) => {
+          const known = new Set(loaded.map((it) => it.interactionId))
+          return [...prev.filter((it) => !known.has(it.interactionId)), ...loaded]
+        })
+      })
       .catch((err) => {
         if (err instanceof ApiError && err.kind === 'abort') return
         setInteractionsError(
@@ -165,7 +173,9 @@ export default function CustomerDetailsPage({
             {!interactionsLoading && !interactionsError && interactions.length === 0 && (
               <p className="empty">No interactions recorded for this customer.</p>
             )}
-            {!interactionsLoading && !interactionsError && interactions.length > 0 && (
+            {/* Not gated on interactionsError: a failed reload must not hide
+                interactions that were saved successfully. */}
+            {interactions.length > 0 && (
                 <div className="table-wrap">
                   <table className="data">
                     <thead><tr><th>Channel</th><th>Notes</th><th>Recorded</th></tr></thead>

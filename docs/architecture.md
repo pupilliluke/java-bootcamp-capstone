@@ -277,5 +277,7 @@ Not yet built, listed so the diagram is not read as a plan:
   send are not one atomic resource; the outbox shown above remains the target.
 - **Consumer idempotency is still in memory.** It protects a log statement, not
   a durable audit row.
-- **CI exists, but container images and Kubernetes manifests do not.** `k8s/`
-  and `infra/` do not exist yet.
+- **Nothing deploys from the pipeline yet.** The container image is built and
+  checked on every pull request — `backend/Dockerfile`, hadolint,
+  container-structure-test, trivy, and `ContainerImageIT` — but no job publishes
+  it to a registry or applies it to a cluster.

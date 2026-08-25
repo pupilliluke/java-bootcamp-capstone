@@ -31,7 +31,11 @@ test('agent can create a customer, log an interaction, and read it back', async 
     })
   })
   page.on('console', (message) => {
-    if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`)
+    if (message.type() !== 'error') return
+    // Same intentional cancellations the requestfailed handler below skips —
+    // Chromium also surfaces them on the console.
+    if (message.text().includes('ERR_ABORTED')) return
+    browserErrors.push(`console: ${message.text()}`)
   })
   page.on('pageerror', (error) => browserErrors.push(`page: ${error.message}`))
   page.on('requestfailed', (request) => {
@@ -150,4 +154,27 @@ test('agent can create a customer, log an interaction, and read it back', async 
       })
     }
   }
+
+  // Assertions, not just attachments. Collected evidence nobody checks lets the
+  // journey stay green through an uncaught error, a failed request, or a
+  // correlation id the backend quietly stopped echoing.
+  expect(browserErrors, 'no console, page, or network errors during the journey').toEqual([])
+
+  expect(
+    apiCalls.filter(
+      (call) =>
+        call.requestCorrelationId && call.responseCorrelationId !== call.requestCorrelationId,
+    ),
+    'every API response echoes the correlation id its request carried',
+  ).toEqual([])
+
+  // The read-back step proves persistence only if it really went to the server.
+  expect(
+    apiCalls.some(
+      (call) =>
+        call.method === 'GET' &&
+        call.path === `/api/customers/${encodeURIComponent(customerId)}/interactions`,
+    ),
+    'the interaction history was read from the nested customer endpoint',
+  ).toBe(true)
 })
