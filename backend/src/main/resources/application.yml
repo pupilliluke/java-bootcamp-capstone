@@ -20,6 +20,21 @@ spring:
   config:
     import: optional:file:./.env[.properties],optional:file:../.env[.properties]
 
+  datasource:
+    hikari:
+      # Hikari's default is 30 seconds, and measurement is what makes that the
+      # wrong number here: with the database stopped, /actuator/health/readiness
+      # took 31.0s to answer 503. It answers correctly, but a readiness probe
+      # that blocks a request thread for half a minute is one that runs out of
+      # threads during exactly the outage it exists to report.
+      #
+      # 10s keeps roughly that much slack for a database still accepting its
+      # first connections at startup, while bounding what one probe can hold.
+      # The trade is real in the other direction too: a request that cannot get
+      # a connection now fails in 10s instead of 30, which for a web request is
+      # an improvement -- 30 seconds is longer than most callers wait anyway.
+      connection-timeout: 10000
+
   jpa:
     hibernate:
       # validate, never update: the schema is Flyway's to own. An entity that
@@ -67,6 +82,30 @@ management:
       show-details: when-authorized
       probes:
         enabled: true
+
+      # The two probes answer different questions, and conflating them is the
+      # classic way to turn a database outage into an outage of everything.
+      #
+      # readiness — "should this instance be sent traffic right now?"
+      # Kubernetes uses it to decide Service membership. The default group holds
+      # only readinessState, a flag meaning Spring finished starting, which never
+      # consults the datasource: an instance whose database had gone would keep
+      # answering UP and keep being sent requests it cannot serve. Worse during a
+      # rolling deploy, where new instances report ready before they can work and
+      # the old ones are retired underneath them. Adding db is what makes the
+      # answer honest.
+      #
+      # liveness — "is this instance broken beyond recovery, restart it?"
+      # db is deliberately NOT here. Failing liveness kills the container, and
+      # restarting an application cannot fix a database that is down: every
+      # instance would fail at once and crash-loop until the database returned,
+      # turning a recoverable outage into a self-inflicted one. Liveness stays a
+      # question about this process only.
+      group:
+        readiness:
+          include: readinessState,db
+        liveness:
+          include: livenessState
 
 logging:
   pattern:

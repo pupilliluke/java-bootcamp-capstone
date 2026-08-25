@@ -3,6 +3,7 @@ package com.capstone.crm.service;
 import com.capstone.crm.api.dto.CustomerMapper;
 import com.capstone.crm.api.dto.CustomerRequestDTO;
 import com.capstone.crm.api.dto.CustomerResponseDTO;
+import com.capstone.crm.api.dto.CustomerUpdateDTO;
 import com.capstone.crm.entity.Customer;
 import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
@@ -54,5 +55,20 @@ public class CustomerService {
         return customerRepository.findAll().stream()
                 .map(CustomerMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    public CustomerResponseDTO update(String customerId, CustomerUpdateDTO request) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
+        CustomerMapper.applyUpdate(customer, request);
+        Customer saved = customerRepository.save(customer);
+        return CustomerMapper.toResponse(saved);
+    }
+
+    public void delete(String customerId) {     //soft delete. just set to closed
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
+        customer.setStatus(CustomerStatus.CLOSED);
+        customerRepository.save(customer);
     }
 }

@@ -8,9 +8,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,11 +23,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Transactional
 class AppUserAuthTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired AppUserRepository users;
     @Autowired CrmUserDetailsService userDetailsService;
+    @Autowired PasswordEncoder passwordEncoder;
 
     @Test
     void seederCreatesBothDemoAccountsWithHashedPasswords() {
@@ -55,19 +59,11 @@ class AppUserAuthTest {
 
     @Test
     void adminAccountIsNotForbiddenFromAdminOnlyPaths() throws Exception {
-        String token = login("admin1", "admin1");
+        String token = login("admin1", "admin1", "ADMIN");
 
-        int status = mockMvc.perform(get("/api/admin/reports")
+        mockMvc.perform(get("/api/admin/users")
                         .header("Authorization", "Bearer " + token))
-                .andReturn()
-                .getResponse()
-                .getStatus();
-
-        // Nothing is mapped under /api/admin yet, so the exact status is decided
-        // by error handling rather than by security. The property under test is
-        // that an ADMIN role from the database clears the rule that stops an
-        // AGENT with 403 (see SecurityRulesTest.agentIsForbiddenFromAdminPaths).
-        assertThat(status).isNotEqualTo(403);
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -79,12 +75,79 @@ class AppUserAuthTest {
                 .isEqualTo(UserRole.ADMIN);
     }
 
-    private String login(String username, String password) throws Exception {
+    @Test
+    void disabledAccountCannotLogIn() throws Exception {
+        AppUser disabled = saveUser("disabled-login", "disabled-login@example.test", "password123", UserRole.AGENT);
+        disabled.setEnabled(false);
+        users.saveAndFlush(disabled);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"disabled-login\",\"password\":\"password123\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenIsRejectedAfterAccountIsDisabled() throws Exception {
+        AppUser user = saveUser("disabled-token", "disabled-token@example.test", "password123", UserRole.AGENT);
+        String token = login("disabled-token", "password123", "AGENT");
+
+        user.setEnabled(false);
+        users.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/customers")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenIsRejectedAfterAccountIsDeleted() throws Exception {
+        AppUser user = saveUser("deleted-token", "deleted-token@example.test", "password123", UserRole.AGENT);
+        String token = login("deleted-token", "password123", "AGENT");
+
+        users.delete(user);
+        users.flush();
+
+        mockMvc.perform(get("/api/customers")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void existingAdminTokenUsesCurrentDatabaseRoleAfterDemotion() throws Exception {
+        AppUser user = saveUser("demoted-admin", "demoted-admin@example.test", "password123", UserRole.ADMIN);
+        String token = login("demoted-admin", "password123", "ADMIN");
+
+        user.setRole(UserRole.AGENT);
+        users.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/customers")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    private AppUser saveUser(
+            String username,
+            String email,
+            String rawPassword,
+            UserRole role) {
+        return users.saveAndFlush(new AppUser(
+                username,
+                email,
+                passwordEncoder.encode(rawPassword),
+                role));
+    }
+
+    private String login(String username, String password, String expectedRole) throws Exception {
         String body = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("ADMIN"))
+                .andExpect(jsonPath("$.role").value(expectedRole))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
