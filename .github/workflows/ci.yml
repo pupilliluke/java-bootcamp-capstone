@@ -660,6 +660,12 @@ jobs:
       # CI-only value—not a deployed or shared secret.
       JWT_SECRET: ci-e2e-secret-that-is-at-least-32-bytes-long
 
+      # Do not load Google Sign-In during the e2e run. The Vite dev server that
+      # playwright.config.ts starts reads this, so the GSI script and widget are
+      # never included and cannot flake the journey. (playwright.config.ts also
+      # sets it on the dev-server command; this makes the intent visible in CI.)
+      VITE_ENABLE_GSI: "false"
+
     defaults:
       run:
         working-directory: frontend

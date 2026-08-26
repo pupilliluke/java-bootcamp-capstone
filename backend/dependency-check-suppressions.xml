@@ -30,6 +30,12 @@
 
   Nothing here is accepted-but-exploitable. If that changes, it belongs in
   docs/risk-register.md under Accepted risks, not in this file.
+
+  Addendum of 2026-08-26, for the Google Sign-In work. Adding google-api-client
+  2.7.0 puts grpc-api on the classpath, which Dependency-Check flags at 7.5 and
+  9.1 against a CPE shared by three unrelated gRPC implementations. Suppressed
+  below to the same standard: the vulnerable code is not on this classpath, and
+  in this case was never written in this language.
   ===========================================================================
 -->
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
@@ -92,6 +98,62 @@
     <cve>CVE-2026-34479</cve>
     <cve>CVE-2026-34480</cve>
     <cve>CVE-2026-34481</cve>
+  </suppress>
+
+  <!--
+    CVE-2024-11407, CVE-2026-33186 - grpc-api and grpc-context, 1.66.0
+    Owner: Luke Pupilli. Reviewed 2026-08-26.
+
+    Neither CVE is against gRPC for Java. Both sit under the single shared CPE
+    cpe:2.3:a:grpc:grpc and are told apart only by target_sw - a field
+    Dependency-Check does not match on - so a Java jar inherits a C++ bug and a
+    Go bug on its version number alone.
+
+    CVE-2024-11407 (7.5) is gRPC-C++: data corruption via
+    GRPC_ARG_TCP_TX_ZEROCOPY_ENABLED. Its CPE carries target_sw "-".
+
+    CVE-2026-33186 (9.1) is gRPC-Go. It aliases to GHSA-p77j-4mvh-x3m3 and
+    GO-2026-4762, and that advisory's OSV record lists exactly one affected
+    package: ecosystem Go, name google.golang.org/grpc, fixed in 1.79.3. Its CPE
+    carries target_sw "go". Neither advisory has a Maven entry at all.
+
+    Asking OSV about the Java artifact directly - io.grpc:grpc-api at 1.66.0 -
+    returns {}. The GHSA database holds no advisory against this artifact at any
+    version.
+
+    What is on the classpath is grpc-api, arriving under google-http-client,
+    which google-api-client needs to verify Google Sign-In tokens:
+
+        \- com.google.api-client:google-api-client:jar:2.7.0:compile
+           \- com.google.http-client:google-http-client:jar:1.45.0:compile
+              \- io.grpc:grpc-context:jar:1.66.0:compile
+                 \- io.grpc:grpc-api:jar:1.66.0:runtime
+
+    Excluding it is not an option, though it looks like one. opencensus-api
+    reaches io.grpc.Context from HttpRequest.execute(), so dropping the jar turns
+    every Google sign-in into a NoClassDefFoundError - and the unit tests stay
+    green while it happens, because they stub GoogleTokenVerifier rather than
+    exercising the real adapter. Verified by loading the adapter's actual path
+    under -verbose:class with the grpc jars removed.
+
+    Suppressed by id rather than pinned to a newer grpc, deliberately. A pin to
+    1.83.1 also goes green, but only by moving the version out of both ranges:
+    this CPE has accumulated 14 CVEs, and the same target_sw-blind matching will
+    re-flag the jar as soon as any grpc CVE in any language lands with a range
+    past the pinned version. Naming the two ids puts the reasoning where the next
+    person to see this build go red will find it.
+
+    Both jars are named because they carry the same cpe:2.3:a:grpc:grpc entry and
+    the same version. Suppressing only grpc-api moves the identical finding onto
+    grpc-context rather than clearing it.
+
+    Verify with: ./mvnw dependency:tree -Dincludes="io.grpc:*"
+  -->
+  <suppress until="2026-11-26Z">
+    <notes>gRPC-C++ and gRPC-Go defects sharing the grpc:grpc CPE. Neither affects gRPC for Java; OSV holds no advisory against io.grpc:grpc-api or grpc-context at any version. Owner: Luke Pupilli.</notes>
+    <packageUrl regex="true">^pkg:maven/io\.grpc/grpc-(api|context)@.*$</packageUrl>
+    <cve>CVE-2024-11407</cve>
+    <cve>CVE-2026-33186</cve>
   </suppress>
 
 </suppressions>
