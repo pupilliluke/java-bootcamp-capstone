@@ -78,9 +78,6 @@ jobs:
       - name: Verify
         run: ./mvnw -B -ntp clean verify
 
-      # TODO: the Dependency-Check gate belongs here, as its own issue.
-      # See notes/Week 5/Module 40/lab40-dependency-check-plan.md.
-
       # if: always() so a failing build still uploads the reports that explain
       # why. Without it the one run you actually need to read has no evidence.
       - name: Upload test reports
@@ -91,37 +88,6 @@ jobs:
           path: |
             backend/target/surefire-reports/**
             backend/target/failsafe-reports/**
-
-      # Answers a different question from the trivy scan in the image job. Trivy
-      # looks at the built container; this looks at the dependency tree Maven
-      # resolves, so it sees things that never reach an image layer and it runs
-      # without waiting for a build.
-      #
-      # Pull requests included, deliberately. The finding set moves when the world
-      # moves rather than when the diff does, which is an argument for running it
-      # often rather than an argument for running it late: a CVE published on
-      # Tuesday should not first appear on a merge to main.
-      #
-      # continue-on-error is deliberately NOT set. A High or worse finding stops
-      # the build. Without that this is a report, and the rubric's Exemplary
-      # descriptor asks for a gate.
-      - name: Dependency-Check
-        env:
-          # Unset is survivable - the plugin falls back to unauthenticated NVD
-          # access, which is rate-limited but works. Add the secret to make it
-          # usable rather than merely possible.
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        # The threshold and the suppressions live in the POM and in
-        # backend/dependency-check-suppressions.xml, so this command behaves the
-        # same on a laptop as it does here.
-        run: ./mvnw -B -ntp -Psecurity-scan dependency-check:check
-
-      - name: Upload the vulnerability report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: reports/**
 
   frontend:
     name: frontend
@@ -259,6 +225,24 @@ jobs:
       # the difference between a usable check and a forty-minute one. Trivy runs
       # here because the action caches its database between runs and because it
       # also sweeps for committed secrets.
+      #
+      # exit-code 1, so this gates rather than reports. It replaces the
+      # Dependency-Check step that used to sit in the backend job, and it is a
+      # straight upgrade rather than a retreat: the image carries the Spring Boot
+      # fat jar, so BOOT-INF/lib is scanned here and every dependency that
+      # actually ships is covered. Trivy matches on package coordinates instead
+      # of CPE strings, which is why it does not reproduce the three CPE
+      # false positives Dependency-Check needed suppressing - and why it caught
+      # CVE-2026-54291 in pgjdbc, which Dependency-Check scored 5.9 and let
+      # straight through its 7.0 threshold.
+      #
+      # What is given up is the pre-build scan: this job needs backend and
+      # frontend first, so a bad dependency surfaces after a build rather than in
+      # the first minute. That is the price of not maintaining a 189MB NVD
+      # database that no key was available for.
+      #
+      # ignore-unfixed stays on. A finding we cannot act on is a finding that
+      # would teach people to ignore this step.
       - name: Vulnerability and secret scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -266,7 +250,8 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "0"
+          trivyignores: .trivyignore.yaml
+          exit-code: "1"
 
       # Last, because it is the slowest: starts the real image against a real
       # PostgreSQL and talks to it over HTTP. Testcontainers brings its own
