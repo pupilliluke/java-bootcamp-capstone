@@ -132,6 +132,60 @@ chosen to match three known failure modes, not systematic mutation coverage:
 they prove the check is failable, not that it catches everything. A wrong CPU
 limit or a resource request too large to schedule would still get through.
 
+## Running the checks on the shared cluster
+
+`k8s/smoke.sh` was written against a cluster it owns -- a k3d on a laptop, or the
+throwaway one CI creates -- and it sets that cluster up before checking it. On
+the course cluster we have admin rights inside one namespace and nothing outside
+it, so the setup half is not ours to do.
+
+```
+OWN_CLUSTER=0 NS=studentNN INGRESS=<cluster-host>:80 \
+  HOST_HEADER=<routable-host> ./k8s/smoke.sh
+```
+
+`OWN_CLUSTER` defaults to `1`, so a laptop run and the `cluster` CI job are
+unaffected.
+
+### What it skips, and why each one
+
+| Step | On our own cluster | On the shared cluster |
+| ---- | ------------------ | --------------------- |
+| 1. Namespace | `kubectl apply -f k8s/namespace.yaml` | Provided. We have no rights to create one |
+| 1. PostgreSQL | Applies `k8s/test/postgres.yaml` | Provided. That file is a throwaway fixture with no volume |
+| 2. Secret | Creates `crm-api-secrets` with test values | **Skipped, and this is the important one.** It would succeed |
+| 3. ConfigMap patch | Repoints the database at the in-cluster `postgres` Service | That Service does not exist here |
+| 4-6. The checks | Run | Run unchanged |
+
+Step 2 is the one worth being explicit about. The other three fail loudly or do
+nothing useful; that one *works*. It writes `LOCAL_DB_PASSWORD=smoke-test-only`
+over the real credential, and the next pod to restart cannot reach the database.
+A check that breaks the thing it was run to verify is worse than no check.
+
+The script refuses to start unless `NS`, `INGRESS` and `HOST_HEADER` are all set,
+rather than falling back to `crm` and `localhost:8088`. Those defaults are a k3d
+port mapping and somebody else's namespace, and a `kubectl set image` pointed at
+the wrong namespace is not a mistake worth leaving available.
+
+### What is still proven
+
+Steps 5 and 6 are the valuable half and they are untouched, because they are
+`kubectl set image` and `kubectl rollout undo` inside our own namespace and
+neither needs any of the setup above:
+
+- a rollout of an image that does not exist does **not** converge
+- the ingress keeps returning 200 throughout, so the bad version never reaches a user
+- `rollout undo` restores the previous image, matched against what was recorded before the break
+- readiness returns 200 and authorisation is still enforced afterwards
+
+That is the rollback rehearsal, and it is now rehearsed on the cluster it would
+actually be performed on.
+
+### Before running it
+
+It deliberately breaks a running deployment for about a minute. Fine in your own
+namespace, and not something to run during a demo.
+
 ## Triggers
 
 Roll back when any of these hold after a deploy:
