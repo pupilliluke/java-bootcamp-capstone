@@ -1,6 +1,7 @@
 package com.capstone.crm.api;
 
 import com.capstone.crm.security.JwtService;
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -8,6 +9,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -95,17 +99,17 @@ class CustomerControllerTest {
     }
 
     @Test
-    void deletingACustomerSoftDeletesRatherThanRemovingTheRow() throws Exception {
+    void deletingACustomerRemovesTheRow() throws Exception {
         String token = jwtService.issueToken("admin1", "ADMIN");
+        String customerId = createCustomer(token);
 
-        mockMvc.perform(delete("/api/customers/CUS-1002")
+        mockMvc.perform(delete("/api/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/customers/CUS-1002")
+        mockMvc.perform(get("/api/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CLOSED"));
+                .andExpect(status().isNotFound());
     }
 
     // admin1, not agent1: authorization is checked before the controller runs, so
@@ -118,140 +122,112 @@ class CustomerControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // --- closing is ADMIN-only however you reach it ---------------------------
+    // --- closing is an ordinary edit; deleting is not --------------------------
     //
-    // delete() is a soft delete: it sets CLOSED and keeps the record. So the
-    // ADMIN rule on DELETE only holds if PUT cannot reach the same state, and
-    // before this it could — the edit form offers CLOSED in its status dropdown
-    // and any agent could pick it. These three pin the rule down: the transition
-    // is refused, an admin may make it, and an already-closed customer stays
-    // editable so the guard does not freeze the record.
+    // delete() is a hard delete, admin-only (SecurityConfig gates the DELETE
+    // verb). Closing a customer is a completely different operation — it is
+    // just update() setting status to CLOSED — and is not role-restricted: any
+    // agent can do it, the same as any other field edit.
     //
     // Each test makes its own customer. Customers are a real table now, shared by
     // every test class in the JVM through the H2 database, so reusing CUS-1001
     // would make the result depend on which test ran first.
     @Test
-    void agentIsForbiddenFromClosingACustomerThroughUpdate() throws Exception {
+    void agentCanCloseACustomerThroughUpdate() throws Exception {
         String agent = jwtService.issueToken("agent1", "AGENT");
-        createCustomer("CUS-7001", agent);
+        String customerId = createCustomer(agent);
 
-        mockMvc.perform(put("/api/customers/CUS-7001")
+        mockMvc.perform(put("/api/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyWithStatus("CUS-7001", "Case Study", "CLOSED")))
-                .andExpect(status().isForbidden())
-                // The body matters, not just the status: the edit form renders
-                // this string, so an agent sees why the save was refused rather
-                // than a form that silently does nothing.
-                .andExpect(jsonPath("$.message").value("Only an administrator can close a customer"));
-
-        mockMvc.perform(get("/api/customers/CUS-7001")
-                        .header("Authorization", "Bearer " + agent))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
-    }
-
-    @Test
-    void adminCanCloseACustomerThroughUpdate() throws Exception {
-        String admin = jwtService.issueToken("admin1", "ADMIN");
-        createCustomer("CUS-7002", admin);
-
-        mockMvc.perform(put("/api/customers/CUS-7002")
-                        .header("Authorization", "Bearer " + admin)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyWithStatus("CUS-7002", "Case Study", "CLOSED")))
+                        .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"));
     }
 
     @Test
     void agentCanStillEditACustomerThatIsAlreadyClosed() throws Exception {
-        String admin = jwtService.issueToken("admin1", "ADMIN");
         String agent = jwtService.issueToken("agent1", "AGENT");
-        createCustomer("CUS-7003", admin);
+        String customerId = createCustomer(agent);
 
-        mockMvc.perform(delete("/api/customers/CUS-7003")
-                        .header("Authorization", "Bearer " + admin))
-                .andExpect(status().isNoContent());
-
-        mockMvc.perform(put("/api/customers/CUS-7003")
+        mockMvc.perform(put("/api/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyWithStatus("CUS-7003", "Renamed While Closed", "CLOSED")))
+                        .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/customers/" + customerId)
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("Renamed While Closed", randomEmail(), "CLOSED")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fullName").value("Renamed While Closed"))
                 .andExpect(jsonPath("$.status").value("CLOSED"));
     }
 
-    // --- customer ids are canonically upper case ------------------------------
+    // --- customer ids are server-assigned and canonically upper case -----------
     //
-    // customer_id is a case-sensitive primary key, so "cus-8001" and "CUS-8001"
-    // would otherwise be two customers that look like one on screen — and
-    // interaction rows key off the same value, so history would split between
-    // them. CustomerService upper-cases on the way in; ck_customer_id_upper in
-    // V3__customer.sql is the backstop if anything ever bypasses it.
+    // customer_id is a case-sensitive primary key. CustomerService generates it
+    // upper case from the start (see customer_number_seq), and the caller never
+    // supplies one, but a URL path is still free-typed, so "cus-1010" and
+    // "CUS-1010" must resolve to the same row rather than looking like two
+    // customers. ck_customer_id_upper in V3__customer.sql is the backstop.
     @Test
-    void aLowerCaseCustomerIdIsStoredAndAddressableInUpperCase() throws Exception {
+    void aGeneratedCustomerIdIsAddressableInEitherCase() throws Exception {
         String agent = jwtService.issueToken("agent1", "AGENT");
+        String customerId = createCustomer(agent);
 
-        mockMvc.perform(post("/api/customers")
-                        .header("Authorization", "Bearer " + agent)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"customerId":"cus-8001","fullName":"Lower Case","email":"cus-8001@example.test",\
-                                "phone":"555-0000","status":"ACTIVE"}
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
-
-        // Reachable by either spelling, and it is the same single record.
-        mockMvc.perform(get("/api/customers/cus-8001")
+        mockMvc.perform(get("/api/customers/" + customerId.toLowerCase())
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
+                .andExpect(jsonPath("$.customerId").value(customerId));
 
-        mockMvc.perform(get("/api/customers/CUS-8001")
+        mockMvc.perform(get("/api/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.customerId").value("CUS-8001"));
+                .andExpect(jsonPath("$.customerId").value(customerId));
     }
 
+    // Replaces a case-collision test that no longer applies: a client can no
+    // longer choose a customer_id to collide with, so this instead pins the
+    // property that actually matters now — every created customer gets its own
+    // distinct, sequential id.
     @Test
-    void theSameIdInAnotherCaseIsADuplicateRatherThanASecondCustomer() throws Exception {
+    void consecutiveCreatesGetDistinctSequentialIds() throws Exception {
         String agent = jwtService.issueToken("agent1", "AGENT");
-        createCustomer("CUS-8002", agent);
 
-        mockMvc.perform(post("/api/customers")
-                        .header("Authorization", "Bearer " + agent)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"customerId":"cus-8002","fullName":"Case Twin","email":"twin@example.test",\
-                                "phone":"555-0000","status":"ACTIVE"}
-                                """))
-                .andExpect(status().isConflict());
+        String first = createCustomer(agent);
+        String second = createCustomer(agent);
+
+        assertThat(first).isNotEqualTo(second);
+        assertThat(first).matches("CUS-\\d+");
+        assertThat(second).matches("CUS-\\d+");
+        assertThat(Long.parseLong(second.substring(4)))
+                .isGreaterThan(Long.parseLong(first.substring(4)));
     }
 
-    // Emails are derived from the customer id rather than shared, because
-    // V3__customer.sql declares uq_customer_email. These customers used to live
-    // in a ConcurrentHashMap that had no opinion about duplicates; against a real
-    // table a shared address makes the second insert a 409.
-    private void createCustomer(String customerId, String token) throws Exception {
-        mockMvc.perform(post("/api/customers")
+    // Emails are randomised rather than shared, because V3__customer.sql
+    // declares uq_customer_email — a shared address makes the second insert a
+    // 409, and customer_id is no longer available to derive one from.
+    private String createCustomer(String token) throws Exception {
+        String body = mockMvc.perform(post("/api/customers")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerId":"%s","fullName":"Case Study","email":"%s",\
-                                "phone":"555-0000","status":"ACTIVE"}
-                                """.formatted(customerId, emailFor(customerId))))
-                .andExpect(status().isCreated());
+                                {"fullName":"Case Study","email":"%s","phone":"555-0000","status":"ACTIVE"}
+                                """.formatted(randomEmail())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.customerId");
     }
 
-    private static String bodyWithStatus(String customerId, String fullName, String status) {
+    private static String bodyWithStatus(String fullName, String email, String status) {
         return """
                 {"fullName":"%s","email":"%s","phone":"555-0000","status":"%s"}
-                """.formatted(fullName, emailFor(customerId), status);
+                """.formatted(fullName, email, status);
     }
 
-    private static String emailFor(String customerId) {
-        return customerId.toLowerCase() + "@example.test";
+    private static String randomEmail() {
+        return "customer-" + UUID.randomUUID() + "@example.test";
     }
 }

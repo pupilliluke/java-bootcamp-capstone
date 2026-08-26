@@ -32,10 +32,12 @@ export default function CustomerDetailsPage({
   const [interactionsError, setInteractionsError] = useState('')
   const [note, setNote] = useState('')
 
-  // Closing a customer is ADMIN-only. The button is hidden for agents, and the API
-  // refuses them independently — the hidden control is convenience, not the guard.
-  const [closing, setClosing] = useState(false)
-  const [closeError, setCloseError] = useState<string | null>(null)
+  // Deleting a customer is ADMIN-only. The button is hidden for agents, and the
+  // API refuses them independently — the hidden control is convenience, not the
+  // guard. This is a hard delete: the row is gone, not just marked CLOSED —
+  // agents set a customer to CLOSED through the ordinary edit form instead.
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -65,26 +67,25 @@ export default function CustomerDetailsPage({
     return () => ctrl.abort()
   }, [customerId])
 
-  async function handleClose() {
+  async function handleDelete() {
     if (!customer) return
     const confirmed = window.confirm(
-      `Close customer "${customer.fullName}" (${customer.customerId})? Their status becomes CLOSED. The record is kept and an admin can reopen it by editing the status.`,
+      `Delete customer "${customer.fullName}" (${customer.customerId})? This permanently removes the record and cannot be undone.`,
     )
     if (!confirmed) return
 
-    setClosing(true)
-    setCloseError(null)
+    setDeleting(true)
+    setDeleteError(null)
     try {
       await customersApi.remove(customer.customerId)
       // Cleared before navigating rather than relying on the navigation to
       // unmount this page. It does today, but that is CustomerWorkspace's
       // rendering detail, not something this handler should depend on.
-      setClosing(false)
-      // The list refetches on remount, so the row shows its CLOSED status.
+      setDeleting(false)
       navigate({ name: 'customers' })
     } catch (err) {
-      setCloseError(err instanceof ApiError ? err.message : 'Could not close customer')
-      setClosing(false)
+      setDeleteError(err instanceof ApiError ? err.message : 'Could not delete customer')
+      setDeleting(false)
     }
   }
 
@@ -123,13 +124,13 @@ export default function CustomerDetailsPage({
         <div className="actions-row">
           <button className="btn-primary" onClick={() => navigate({ name: 'add', edit: customer })}>Edit</button>
           <AdminOnly fallback={null}>
-            <button className="btn-danger" onClick={handleClose} disabled={closing}>
-              {closing ? 'Closing…' : 'Close'}
+            <button className="btn-danger" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
             </button>
           </AdminOnly>
         </div>
       </div>
-      {closeError && <p className="error" role="alert">{closeError}</p>}
+      {deleteError && <p className="error" role="alert">{deleteError}</p>}
 
       <div className="card">
         <div className="profile-head">
