@@ -52,3 +52,8 @@ Thumbs.db
 # Playwright-generated output
 frontend/playwright-report/
 frontend/test-results/
+# Dependency-Check writes its HTML and JSON reports here. They are evidence, not
+# source: regenerate them from a scan rather than committing a snapshot that
+# stops matching the dependencies the moment anyone edits the pom.
+/reports/*
+!/reports/.gitkeep
