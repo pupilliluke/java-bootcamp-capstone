@@ -50,7 +50,16 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
     consumer:
-      group-id: crm-interaction-service-v1
+      # Both the topic and this group are placeholders for the same reason: the
+      # course broker is one shared Kafka with no per-user isolation. Two teams
+      # running the same group id against it join the same consumer group, and
+      # the coordinator then splits partitions between applications that have
+      # nothing to do with each other -- so each side silently sees a fraction of
+      # its own events and rebalances whenever the other restarts.
+      #
+      # Prefixing the topic alone would not fix that. The group id is a separate
+      # namespace on the broker and needs its own value.
+      group-id: ${crm.messaging.consumer-group}
       auto-offset-reset: earliest
       enable-auto-commit: false
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
@@ -111,6 +120,30 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n"
 crm:
+  messaging:
+    # Defaults are the local names, so docker-compose and the test suite are
+    # unaffected and nobody has to set anything to run the project.
+    #
+    # The trade is deliberate, and worth being honest about. A default that
+    # works locally is also a default that collides on the shared cluster if
+    # nobody overrides it, and that failure is silent -- you read another team's
+    # interactions instead of getting an error.
+    #
+    # What reduces the odds is placement, not the default: k8s/configmap.yaml
+    # carries both keys next to LOCAL_DB_HOST and KAFKA_BOOTSTRAP_SERVERS, which
+    # already have to be repointed before anything can reach the cluster. The
+    # change is in front of whoever does that work rather than buried here.
+    #
+    # On the course cluster, prefix both with your own namespace:
+    #   CRM_INTERACTION_TOPIC=studentNN.crm.interaction.v1
+    #   CRM_CONSUMER_GROUP=studentNN.crm-interaction-service-v1
+    #
+    # The dead letter topic follows automatically. KafkaConfig derives it as
+    # record.topic() + ".DLT", so a prefixed topic gets a prefixed DLT with no
+    # second value to keep in step.
+    interaction-topic: ${CRM_INTERACTION_TOPIC:crm.interaction.v1}
+    consumer-group: ${CRM_CONSUMER_GROUP:crm-interaction-service-v1}
+
   security:
     jwt:
       # No default on purpose: a committed fallback is a weak secret that ships,
