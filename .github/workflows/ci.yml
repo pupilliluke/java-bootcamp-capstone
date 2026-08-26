@@ -450,12 +450,41 @@ jobs:
       # not visible to it. Without this the pod sits in ErrImagePull.
       - name: Load the image into the cluster
         run: |
-          k3d image import crm-api:dev -c ci
-          # Verified rather than assumed. k3d image import can exit 0 having
-          # imported nothing -- observed locally, where the pod then spent ten
-          # minutes in ContainerCreating pulling from Docker Hub instead. grep
-          # fails the step if the image is not actually in the cluster.
-          docker exec k3d-ci-server-0 crictl images | grep crm-api
+          # pipefail so a failing `docker exec` is not masked by grep's exit
+          # code, for the same reason the manifests job sets it.
+          set -o pipefail
+
+          # Verified rather than assumed, and retried rather than trusted. k3d
+          # image import can exit 0 having imported nothing -- first observed
+          # locally, where the pod then spent ten minutes in ContainerCreating
+          # pulling from Docker Hub instead, and since seen on CI run
+          # 32982229604: k3d logged "Importing images from tarball" and
+          # "Removing the tarball(s)" 3ms apart, then reported success. The
+          # equivalent import on a healthy run takes about seven seconds.
+          #
+          # The check is therefore the image store, never the exit code. Three
+          # attempts because the failure is intermittent -- the same commit and
+          # the same workflow had passed eleven hours earlier.
+          for attempt in 1 2 3; do
+            # `|| echo` rather than a bare call: the step runs under `bash -e`,
+            # so a non-zero k3d would abort here and skip the retry entirely.
+            # The exit code is not the signal anyway -- the image store is.
+            k3d image import crm-api:dev -c ci \
+              || echo "k3d exited non-zero on attempt ${attempt}" >&2
+            if docker exec k3d-ci-server-0 crictl images | grep crm-api; then
+              echo "crm-api is in the node image store (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt} imported nothing, retrying" >&2
+            sleep 5
+          done
+
+          # Dump what the node actually holds. Without this a failure here says
+          # only that grep found nothing, which is the least useful half of the
+          # answer.
+          echo "crm-api never reached the node image store after 3 attempts" >&2
+          docker exec k3d-ci-server-0 crictl images >&2
+          exit 1
 
       # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on
       # Windows, where git does not reliably carry the executable bit, and a
