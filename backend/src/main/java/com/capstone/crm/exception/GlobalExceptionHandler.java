@@ -57,6 +57,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    // The Google credential was valid but the account is not enabled — a
+    // first-time sign-in that just provisioned a disabled account, or one still
+    // awaiting approval. 403, not 401: we know who they are, they may not in yet.
+    @ExceptionHandler(AccountPendingApprovalException.class)
+    public ResponseEntity<Map<String, Object>> handlePendingApproval(AccountPendingApprovalException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     // Needed because of the catch-all below. Spring Security's own
     // accessDeniedHandler only sees an AccessDeniedException that reaches the
     // filter chain; one thrown inside a controller or service is resolved here

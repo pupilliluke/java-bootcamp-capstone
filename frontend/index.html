@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Neural</title>
+    <!-- Google Identity Services, for "Sign in with Google". async so it never
+         blocks first paint; the login page waits for window.google before it
+         renders the button. -->
+    <script src="https://accounts.google.com/gsi/client" async></script>
   </head>
   <body>
     <div id="root"></div>

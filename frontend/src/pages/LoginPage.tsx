@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/ApiError'
+import GoogleSignInButton from '../auth/GoogleSignInButton'
 
 type Mode = 'signin' | 'register'
 const MIN_PASSWORD = 12
@@ -58,7 +59,7 @@ function LoginBackdrop() {
 }
 
 export default function LoginPage({ expired = false }: { expired?: boolean }) {
-  const { login } = useAuth()
+  const { login, loginWithGoogle } = useAuth()
   const [mode, setMode] = useState<Mode>('signin')
 
   const [username, setUsername] = useState('')
@@ -87,6 +88,22 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
       // Deliberately generic: the server answers identically for an unknown user
       // and a wrong password so the form cannot enumerate valid usernames.
       setError('Invalid username or password')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleGoogleCredential(idToken: string) {
+    if (submitting) return
+    setSubmitting(true)
+    setError('')
+    setNotice('')
+    try {
+      await loginWithGoogle(idToken)
+    } catch (err) {
+      // 403 carries the server's "awaiting approval" message; anything else is
+      // shown generically. Neither is the expired-session path.
+      setError(err instanceof ApiError ? err.message : 'Google sign-in failed')
     } finally {
       setSubmitting(false)
     }
@@ -150,6 +167,7 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
         )}
 
         {mode === 'signin' ? (
+          <>
           <form onSubmit={handleSignIn}>
             <div className="login-field">
               <label htmlFor="username">Username</label>
@@ -186,6 +204,14 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
               {submitting ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
+          <div
+            className="login-or"
+            style={{ textAlign: 'center', margin: '0.85rem 0 0.6rem', opacity: 0.6, fontSize: '0.8rem' }}
+          >
+            or
+          </div>
+          <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} />
+          </>
         ) : (
           <form onSubmit={handleRegister}>
             <div className="login-field">
