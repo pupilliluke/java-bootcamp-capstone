@@ -41,14 +41,23 @@ spec:
           # as pinning the Dependency-Check plugin version -- name the content,
           # not a label somebody can repoint.
           #
-          # It applies here too, and will, once images are pushed: a promotion
-          # between environments should deploy the digest that was tested, not a
-          # tag that happens to point there today. Two things stop it right now.
-          # Nothing is pushed to a registry, so there is no repo digest to name.
-          # And k3d imports into containerd, which computes its own image ID --
-          # verified rather than assumed: docker reports sha256:ebfe1486... for
-          # the build the pod is running, while the pod reports sha256:628d95bd...
-          # Same bits, different string, so the two cannot be compared directly.
+          # It applies here too. The publish job in ci.yml pushes every
+          # develop/main build to GHCR as ghcr.io/pupilliluke/crm-api, tagged by
+          # commit SHA, and prints the repo digest in its run summary. Once the
+          # first publish lands, pin this line to that ref:
+          #
+          #   image: ghcr.io/pupilliluke/crm-api@sha256:<digest from the summary>
+          #
+          # and delete the k3d note below -- a pinned public ref is pullable, so
+          # the import step is no longer needed. The CI cluster job already
+          # overrides with IMAGE=crm-api:dev so it keeps testing the pull
+          # request's candidate rather than re-testing the pinned release.
+          #
+          # crm-api:dev stays only until that first digest exists. One caution
+          # for anyone comparing digests by hand: k3d image import goes through
+          # containerd, which computes its own image ID -- docker reports
+          # sha256:ebfe1486... while the pod reports sha256:628d95bd... for the
+          # same bits. Compare the GHCR repo digest, not the local image ID.
           #
           # For k3d the image has to be inside the cluster first:
           #   k3d image import crm-api:dev -c <cluster>
