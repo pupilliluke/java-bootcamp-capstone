@@ -26,7 +26,7 @@ The repository is public. Anything committed is published.
 | 3 | The example Secret is applied by accident | Moved to `k8s/examples/`, out of reach of `kubectl apply -f k8s/` | Someone using `-R` would still pick it up |
 | 4 | The container is compromised and runs as root | Non-root UID 10001, `allowPrivilegeEscalation: false`, all capabilities dropped | `readOnlyRootFilesystem` is false |
 | 5 | The base image quietly changes under us | Both `FROM` lines pinned by digest | Bumping is a manual, deliberate commit |
-| 6 | A known CVE ships | Trivy on the image, Dependency-Check on dependencies | **Findings are reported, not gated.** A high-severity CVE does not stop a merge |
+| 6 | A known CVE ships | Trivy gates the `image` job on HIGH and CRITICAL, over both the OS layer and the fat jar's `BOOT-INF/lib` | Gated, but after a build rather than in the first minute. Runtime dependencies only; test and provided scope are not scanned |
 | 7 | Nobody can tell which build is running | Digest and commit recorded before deploy; OCI revision label carries the commit | The manifest names a mutable tag. See ADR-005 |
 | 8 | A bad deploy takes the service down | Rolling update keeps the healthy pod; rehearsed rollback | Proven for a missing image, not for a bad working version |
 | 9 | An unauthenticated caller reads customer data | Deny by default; 401 asserted in unit tests and in `k8s/smoke.sh` | — |
@@ -45,5 +45,5 @@ The repository is public. Anything committed is published.
 
 | Item | Owner | Decision needed |
 | ---- | ----- | --------------- |
-| Whether Dependency-Check becomes a hard gate | Luke | Gate, or accept with an expiry date per finding |
+| When to bump the base image digest | Luke | Eight Go defects in the base image's `/usr/bin/pebble` are silenced until 2026-11-26 in `.trivyignore.yaml`. A rebuilt Temurin digest is the fix |
 | Whether to guard `k8s/smoke.sh` on the kubectl context | Luke | Only matters once a non-disposable cluster exists |
