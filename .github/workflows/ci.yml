@@ -405,8 +405,46 @@ jobs:
             -p "8088:80@loadbalancer" \
             --api-port 127.0.0.1:6445 \
             --image rancher/k3s:v1.35.5-k3s1
+
+      # Separate from the create, and not optional. `k3d cluster create` returns
+      # when the server container is running, which is not the same as
+      # kube-apiserver answering requests -- it prints "Cluster 'ci' created
+      # successfully!" and the very next kubectl can still get
+      # "Error from server (ServiceUnavailable): the server is currently unable
+      # to handle the request".
+      #
+      # That gap is why this job used to fail in a different place on each run:
+      # whichever kubectl call happened to land inside the window died, so the
+      # symptom moved between `kubectl version`, the image-import check, and
+      # smoke.sh's first apply, and looked like three unrelated problems.
+      #
+      # /readyz rather than /healthz: healthz goes green while the apiserver is
+      # still finishing startup, readyz is the one that means "will serve you".
+      # Polled with `kubectl get --raw` rather than `kubectl wait`, because wait
+      # needs a working API to wait against and exits immediately when it has
+      # none -- it cannot be its own readiness check.
+      - name: Wait for the cluster to be ready
+        run: |
+          for _ in $(seq 1 90); do
+            if kubectl get --raw='/readyz' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          # Unpolled, so a cluster that never came up fails here with the real
+          # server error rather than silently continuing into the next step.
+          kubectl get --raw='/readyz'
+
+          kubectl wait --for=condition=Ready node --all --timeout=180s
+
+          # CoreDNS resolves the in-cluster PostgreSQL Service that smoke.sh
+          # points the ConfigMap at. Without it the pod starts, fails to resolve
+          # "postgres", and the rollout times out looking like an application
+          # fault rather than a cluster that was not finished starting.
+          kubectl -n kube-system rollout status deploy/coredns --timeout=180s
+
           kubectl version
-          kubectl get nodes
+          kubectl get nodes -o wide
 
       # k3d runs its own containerd; an image in the runner's Docker daemon is
       # not visible to it. Without this the pod sits in ErrImagePull.
