@@ -31,18 +31,13 @@ public class InteractionService {
     }
 
     @Transactional
-    public InteractionEvent createAndPublish(CreateInteractionRequest request, String correlationId) {
-        // Ensures the interaction belongs to a known customer, and yields the
-        // customer's own spelling of its id. Everything below stores that rather
-        // than what the caller typed: a request for "cus-1002" resolves to
-        // CUS-1002, so filing the row under the caller's version would hide it
-        // from the read-back, which queries by exact match. The Kafka key has to
-        // agree for the same reason — one customer, one partition.
+    public InteractionResponseDTO createAndPublish(CreateInteractionRequest request, String correlationId) {
+        //ensures no misses by capitalization
         String customerId = customerService.get(request.customerId()).customerId();
         String interactionId = "INT-" + UUID.randomUUID();
         Instant occurredAt = Instant.now();
 
-        interactionRepository.save(new Interaction(
+        Interaction interaction = interactionRepository.save(new Interaction(
                 interactionId,
                 customerId,
                 request.channel(),
@@ -62,14 +57,13 @@ public class InteractionService {
                 request.notes()
         );
         producer.publish(event);
-        return event;
+
+        return toResponse(interaction);
     }
 
     @Transactional(readOnly = true)
     public List<InteractionResponseDTO> listForCustomer(String customerId) {
-        // A nested customer resource returns 404 when its parent is unknown, and
-        // the lookup below uses the customer's canonical id for the same reason
-        // the write path does.
+        //cannonicalId is all caps
         String canonicalId = customerService.get(customerId).customerId();
         return interactionRepository
                 .findByCustomerIdOrderByOccurredAtDescInteractionIdDesc(canonicalId)
