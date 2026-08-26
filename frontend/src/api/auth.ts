@@ -41,4 +41,17 @@ export const authApi = {
       { intercept401: false },
     )
   },
+
+  // Google Sign-In. Sends the ID token from Google Identity Services and gets
+  // back the same session shape as password login. intercept401 off: an invalid
+  // token is a failed sign-in, and a first-time sign-in answers 403 (pending
+  // approval) — neither is an expired session, so let LoginPage show the message.
+  googleLogin(idToken: string): Promise<LoginResponse> {
+    return http<LoginResponse>(
+      '/api/auth/google',
+      { method: 'POST', body: JSON.stringify({ idToken }) },
+      undefined,
+      { intercept401: false },
+    )
+  },
 }

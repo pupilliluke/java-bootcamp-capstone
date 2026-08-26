@@ -91,6 +91,17 @@
       <scope>runtime</scope>
     </dependency>
 
+    <!-- Verifies Google Sign-In ID tokens: checks the RS256 signature against
+         Google's rotating public keys, the issuer, exp, and that the audience is
+         our OAuth client id. Carries GoogleIdTokenVerifier plus the HTTP
+         transport and Gson JSON factory it needs. Version pinned; Spring Boot's
+         BOM does not manage these coordinates. -->
+    <dependency>
+      <groupId>com.google.api-client</groupId>
+      <artifactId>google-api-client</artifactId>
+      <version>2.7.0</version>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
