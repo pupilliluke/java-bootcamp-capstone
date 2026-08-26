@@ -41,27 +41,34 @@ spec:
           # as pinning the Dependency-Check plugin version -- name the content,
           # not a label somebody can repoint.
           #
-          # It applies here too. The publish job in ci.yml pushes every
-          # develop/main build to GHCR as ghcr.io/pupilliluke/crm-api, tagged by
-          # commit SHA, and prints the repo digest in its run summary. Once the
-          # first publish lands, pin this line to that ref:
+          # It applies here, and now it is applied. The publish job in ci.yml
+          # pushes every develop/main build to GHCR as
+          # ghcr.io/pupilliluke/crm-api, tagged by commit SHA, and prints the
+          # repo digest in its run summary; the digest below came from that
+          # summary rather than from a local `docker inspect`.
           #
-          #   image: ghcr.io/pupilliluke/crm-api@sha256:<digest from the summary>
+          # The digest names the build of commit 3d24997 -- the merge of #73,
+          # the first push that ever ran the publish job. A digest is immutable:
+          # this line now means one specific set of bits, and republishing
+          # :develop cannot silently change what this Deployment runs.
           #
-          # and delete the k3d note below -- a pinned public ref is pullable, so
-          # the import step is no longer needed. The CI cluster job already
-          # overrides with IMAGE=crm-api:dev so it keeps testing the pull
-          # request's candidate rather than re-testing the pinned release.
+          # The package is public, so no imagePullSecret is needed. Verified
+          # rather than assumed: an anonymous ghcr.io token plus a manifest GET
+          # by this digest answers 200, which is the same exchange a kubelet
+          # makes on a node with no registry credentials.
           #
-          # crm-api:dev stays only until that first digest exists. One caution
-          # for anyone comparing digests by hand: k3d image import goes through
-          # containerd, which computes its own image ID -- docker reports
-          # sha256:ebfe1486... while the pod reports sha256:628d95bd... for the
-          # same bits. Compare the GHCR repo digest, not the local image ID.
+          # Local k3d no longer needs `k3d image import` -- a public digest is
+          # pullable from inside the cluster like any other ref.
           #
-          # For k3d the image has to be inside the cluster first:
-          #   k3d image import crm-api:dev -c <cluster>
-          image: crm-api:dev
+          # CI is unaffected: the cluster job runs smoke.sh with
+          # IMAGE=crm-api:dev, so a pull request still tests the image it just
+          # built rather than re-testing this released one.
+          #
+          # To roll forward, replace this with the digest from a later publish
+          # summary. To roll back, put the previous one here -- that is the
+          # whole point of recording them, and docs/rollback-runbook.md holds
+          # the history.
+          image: ghcr.io/pupilliluke/crm-api@sha256:4aab674cdc6f919032d01a4864bf52ea1239e68df22afa5ed68453c64979f0c3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
