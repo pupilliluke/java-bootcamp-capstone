@@ -39,6 +39,12 @@ k3s runs as k3d locally and in CI, both pinned to `rancher/k3s:v1.35.5-k3s1`.
   say which build is running. Lab 51 asks for a digest pin; closing that needs
   an image pushed per commit, which would also let us prove a
   version-to-version rollback instead of only that a bad image is survivable.
+  *Update 2026-08-26:* the registry half is closed — the `publish` job in
+  `ci.yml` pushes every develop/main build to GHCR (the course's named
+  registry) tagged by commit SHA, and prints the repo digest in its run
+  summary. The pin itself lands as a one-line manifest change after the first
+  publish; the procedure is written above the `image:` line in
+  `k8s/deployment.yaml`.
 - **NFR impact:** Recovery. Rollback rehearsed, readiness back within seconds,
   ingress served 200 throughout the bad rollout.
 - **Evidence later labs will need:** `docs/rollback-runbook.md`,
