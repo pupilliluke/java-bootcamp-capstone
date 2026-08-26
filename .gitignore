@@ -48,3 +48,7 @@ docs/local/
 *.log
 .DS_Store
 Thumbs.db
+
+# Playwright-generated output
+frontend/playwright-report/
+frontend/test-results/
