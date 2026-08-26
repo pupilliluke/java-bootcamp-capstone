@@ -56,7 +56,7 @@ export default function CustomerListPage({
 
   // Clamped before slicing, not after. The previous version derived a safePage
   // for the pager while the table kept slicing with the raw `page`, so a list
-  // that shrank underneath a page > 1 — an admin closes customers and the
+  // that shrank underneath a page > 1 — someone closes customers and the
   // refetch returns fewer rows — showed "No customers match your search" while
   // the pager highlighted page 1 and reported "Showing 1 to 8 of N entries".
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))

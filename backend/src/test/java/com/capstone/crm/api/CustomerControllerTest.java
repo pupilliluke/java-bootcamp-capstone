@@ -95,17 +95,17 @@ class CustomerControllerTest {
     }
 
     @Test
-    void deletingACustomerSoftDeletesRatherThanRemovingTheRow() throws Exception {
+    void deletingACustomerRemovesTheRow() throws Exception {
         String token = jwtService.issueToken("admin1", "ADMIN");
+        createCustomer("CUS-7004", token);
 
-        mockMvc.perform(delete("/api/customers/CUS-1002")
+        mockMvc.perform(delete("/api/customers/CUS-7004")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/customers/CUS-1002")
+        mockMvc.perform(get("/api/customers/CUS-7004")
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("CLOSED"));
+                .andExpect(status().isNotFound());
     }
 
     // admin1, not agent1: authorization is checked before the controller runs, so
@@ -118,20 +118,18 @@ class CustomerControllerTest {
                 .andExpect(status().isNotFound());
     }
 
-    // --- closing is ADMIN-only however you reach it ---------------------------
+    // --- closing is an ordinary edit; deleting is not --------------------------
     //
-    // delete() is a soft delete: it sets CLOSED and keeps the record. So the
-    // ADMIN rule on DELETE only holds if PUT cannot reach the same state, and
-    // before this it could — the edit form offers CLOSED in its status dropdown
-    // and any agent could pick it. These three pin the rule down: the transition
-    // is refused, an admin may make it, and an already-closed customer stays
-    // editable so the guard does not freeze the record.
+    // delete() is a hard delete, admin-only (SecurityConfig gates the DELETE
+    // verb). Closing a customer is a completely different operation — it is
+    // just update() setting status to CLOSED — and is not role-restricted: any
+    // agent can do it, the same as any other field edit.
     //
     // Each test makes its own customer. Customers are a real table now, shared by
     // every test class in the JVM through the H2 database, so reusing CUS-1001
     // would make the result depend on which test ran first.
     @Test
-    void agentIsForbiddenFromClosingACustomerThroughUpdate() throws Exception {
+    void agentCanCloseACustomerThroughUpdate() throws Exception {
         String agent = jwtService.issueToken("agent1", "AGENT");
         createCustomer("CUS-7001", agent);
 
@@ -139,39 +137,20 @@ class CustomerControllerTest {
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("CUS-7001", "Case Study", "CLOSED")))
-                .andExpect(status().isForbidden())
-                // The body matters, not just the status: the edit form renders
-                // this string, so an agent sees why the save was refused rather
-                // than a form that silently does nothing.
-                .andExpect(jsonPath("$.message").value("Only an administrator can close a customer"));
-
-        mockMvc.perform(get("/api/customers/CUS-7001")
-                        .header("Authorization", "Bearer " + agent))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
-    }
-
-    @Test
-    void adminCanCloseACustomerThroughUpdate() throws Exception {
-        String admin = jwtService.issueToken("admin1", "ADMIN");
-        createCustomer("CUS-7002", admin);
-
-        mockMvc.perform(put("/api/customers/CUS-7002")
-                        .header("Authorization", "Bearer " + admin)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(bodyWithStatus("CUS-7002", "Case Study", "CLOSED")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CLOSED"));
     }
 
     @Test
     void agentCanStillEditACustomerThatIsAlreadyClosed() throws Exception {
-        String admin = jwtService.issueToken("admin1", "ADMIN");
         String agent = jwtService.issueToken("agent1", "AGENT");
-        createCustomer("CUS-7003", admin);
+        createCustomer("CUS-7003", agent);
 
-        mockMvc.perform(delete("/api/customers/CUS-7003")
-                        .header("Authorization", "Bearer " + admin))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(put("/api/customers/CUS-7003")
+                        .header("Authorization", "Bearer " + agent)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("CUS-7003", "Case Study", "CLOSED")))
+                .andExpect(status().isOk());
 
         mockMvc.perform(put("/api/customers/CUS-7003")
                         .header("Authorization", "Bearer " + agent)

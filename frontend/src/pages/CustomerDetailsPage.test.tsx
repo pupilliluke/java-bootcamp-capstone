@@ -16,7 +16,7 @@ const mockUseCustomer = vi.mocked(useCustomer)
 const mockInteractionsApi = vi.mocked(interactionsApi)
 const mockCustomersApi = vi.mocked(customersApi)
 
-// The page reads the signed-in role to decide whether to offer the close button.
+// The page reads the signed-in role to decide whether to offer the delete button.
 const auth = vi.hoisted(() => ({
   state: { status: 'authenticated', user: { username: 'admin1', role: 'ADMIN' } } as {
     status: string
@@ -137,8 +137,8 @@ describe('CustomerDetailsPage', () => {
     })
   })
 
-  // --- issue #42: closing a customer is ADMIN-only ---------------------------
-  describe('close button', () => {
+  // --- issue #42: deleting a customer is ADMIN-only ---------------------------
+  describe('delete button', () => {
     beforeEach(() => {
       mockUseCustomer.mockReturnValue({ customer, loading: false, error: null })
     })
@@ -146,7 +146,7 @@ describe('CustomerDetailsPage', () => {
     it('is shown to an admin', () => {
       asAdmin()
       renderPage()
-      expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
     })
 
     // The point of the issue. An agent must not see it at all — no disabled
@@ -154,19 +154,19 @@ describe('CustomerDetailsPage', () => {
     it('is hidden from an agent', () => {
       asAgent()
       renderPage()
-      expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
       expect(screen.queryByText(/access denied/i)).not.toBeInTheDocument()
       // The rest of the page still works for them.
       expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument()
     })
 
-    it('closes after the confirm is accepted, then returns to the list', async () => {
+    it('deletes after the confirm is accepted, then returns to the list', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
       mockCustomersApi.remove.mockResolvedValue(undefined)
       const user = userEvent.setup()
       renderPage()
 
-      await user.click(screen.getByRole('button', { name: /close/i }))
+      await user.click(screen.getByRole('button', { name: /delete/i }))
 
       await waitFor(() => expect(mockCustomersApi.remove).toHaveBeenCalledWith('CUS-1001'))
       expect(navigate).toHaveBeenCalledWith({ name: 'customers' })
@@ -177,36 +177,36 @@ describe('CustomerDetailsPage', () => {
       const user = userEvent.setup()
       renderPage()
 
-      await user.click(screen.getByRole('button', { name: /close/i }))
+      await user.click(screen.getByRole('button', { name: /delete/i }))
 
       expect(mockCustomersApi.remove).not.toHaveBeenCalled()
       expect(navigate).not.toHaveBeenCalledWith({ name: 'customers' })
     })
 
-    it('shows an error and stays put when the close fails', async () => {
+    it('shows an error and stays put when the delete fails', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
       mockCustomersApi.remove.mockRejectedValue(new Error('Boom'))
       const user = userEvent.setup()
       renderPage()
 
-      await user.click(screen.getByRole('button', { name: /close/i }))
+      await user.click(screen.getByRole('button', { name: /delete/i }))
 
-      expect(await screen.findByRole('alert')).toHaveTextContent(/could not close customer/i)
+      expect(await screen.findByRole('alert')).toHaveTextContent(/could not delete customer/i)
       expect(navigate).not.toHaveBeenCalledWith({ name: 'customers' })
     })
 
     // The button re-enables on the way out rather than relying on the page
     // being unmounted by the navigation.
-    it('leaves the button enabled after a successful close', async () => {
+    it('leaves the button enabled after a successful delete', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
       mockCustomersApi.remove.mockResolvedValue(undefined)
       const user = userEvent.setup()
       renderPage()
 
-      await user.click(screen.getByRole('button', { name: /close/i }))
+      await user.click(screen.getByRole('button', { name: /delete/i }))
 
       await waitFor(() => expect(navigate).toHaveBeenCalledWith({ name: 'customers' }))
-      expect(screen.getByRole('button', { name: /^close$/i })).toBeEnabled()
+      expect(screen.getByRole('button', { name: /^delete$/i })).toBeEnabled()
     })
   })
 })
