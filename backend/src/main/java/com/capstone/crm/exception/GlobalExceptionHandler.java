@@ -34,11 +34,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(DuplicateCustomerException.class)
-    public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateCustomerException ex) {
-        return build(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
     @ExceptionHandler({DuplicateUserException.class, SelfUserModificationException.class,
             LastAdminException.class})
     public ResponseEntity<Map<String, Object>> handleUserConflict(RuntimeException ex) {
@@ -57,12 +52,7 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
-    // Needed because of the catch-all below. Spring Security's own
-    // accessDeniedHandler only sees an AccessDeniedException that reaches the
-    // filter chain; one thrown inside a controller or service is resolved here
-    // first, and without this entry it would fall through to Exception.class and
-    // be reported as a 500. That would turn "you may not do this" into "the
-    // server is broken", which is both wrong and the harder thing to debug.
+    //fixes the 403 vs 500 issue. now catches AccessDeniedException and throws 403 instead of defualt catch 500
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
