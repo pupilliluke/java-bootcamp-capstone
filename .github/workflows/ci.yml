@@ -4,10 +4,12 @@
 # instead of one, and the wrapper rather than a system Maven so CI builds with
 # the same version the enforcer pins locally.
 #
-# No GitHub secrets are used. The test suite supplies its own JWT secret from
+# One GitHub secret is used: NVD_API_KEY, a read-only rate-limit token for the
+# National Vulnerability Database that grants no access to anything of ours. The
+# test suite supplies its own JWT secret from
 # src/test/resources/application.properties, and the database below is a
-# throwaway container that exists for the length of one job. Nothing here can
-# leak, because there is nothing here to leak.
+# throwaway container that exists for the length of one job. Nothing else here
+# can leak, because there is nothing else here to leak.
 name: CI
 
 on:
@@ -92,6 +94,59 @@ jobs:
             backend/target/surefire-reports/**
             backend/target/failsafe-reports/**
 
+      # The NVD feed is 383k records and about 190MB on disk. Downloading all of
+      # it is what turned the step below into an hour-long coin flip, so it gets
+      # a cache of its own rather than riding along in the Maven one.
+      #
+      # It would ride along by default: the plugin keeps its database under
+      # ~/.m2/repository/org/owasp/dependency-check-data, which is inside the
+      # path setup-java caches above. That does not help, for two reasons. Cache
+      # entries are immutable, and setup-java keys the Maven cache on the hash of
+      # backend/pom.xml - so the database is written at most once, on the first
+      # run after a POM change, and is never refreshed however far behind it
+      # falls. And a run cancelled mid-download saves nothing at all, which is
+      # exactly the run that most needed to save something. Giving it its own
+      # directory also keeps 190MB of vulnerability data out of an entry whose
+      # job is to hold jars.
+      #
+      # The key is windowed for the same immutability reason: a fixed key is
+      # written once and then goes stale forever. The window is 72 hours, to
+      # match nvdValidForHours below. Inside one window a run that finds the key
+      # restores the same database and makes no NVD call at all; at the rollover
+      # a single run pays for an incremental update and writes the next entry.
+      #
+      # Which runs find it depends on scope, which is worth knowing before
+      # reading a slow pull request as a bug. A run may read caches from its own
+      # ref, its base branch and the default branch, but may only write to its
+      # own. So the entries that everyone benefits from are the ones written by
+      # the push trigger on main and develop; a pull request reads those and
+      # keeps its own writes to itself.
+      #
+      # The combined action rather than restore/save as two steps, deliberately.
+      # actions/cache declares post-if: success(), so a run whose gate goes red
+      # saves nothing - which looks like a bug worth fixing and is not. Inside a
+      # window the restore is an exact key hit, and the action never saves on an
+      # exact hit regardless; the only run the difference reaches is the first
+      # partial hit of a new window, where the cost is one delta update of a few
+      # minutes. Splitting the steps to save on failure buys that back and gives
+      # up something better: post-if is what stops a run that times out
+      # mid-download from claiming the window's immutable key with a half-built
+      # database that a later, healthy run would then be unable to replace. Matching the two is what keeps this cheap - a daily key against a
+      # 72-hour validity would re-upload 190MB every day to store a database the
+      # plugin had not touched, evicting the Maven cache to do it. Bump the v1 to
+      # force a full rebuild if a plugin upgrade ever changes the on-disk schema.
+      - name: Stamp the NVD cache window
+        id: nvd-window
+        # Whole 72-hour periods since the epoch. 259200 = 72 * 60 * 60.
+        run: echo "window=$(( $(date -u +%s) / 259200 ))" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.dependency-check-data
+          key: nvd-v1-${{ steps.nvd-window.outputs.window }}
+          restore-keys: nvd-v1-
+
       # Answers a different question from the trivy scan in the image job. Trivy
       # looks at the built container; this looks at the dependency tree Maven
       # resolves, so it sees things that never reach an image layer and it runs
@@ -105,16 +160,62 @@ jobs:
       # continue-on-error is deliberately NOT set. A High or worse finding stops
       # the build. Without that this is a report, and the rubric's Exemplary
       # descriptor asks for a gate.
+      #
+      # timeout-minutes is sized for the cold download, not for the steady
+      # state, and that is a decision forced by having no API key. Populating an
+      # empty database unauthenticated takes about an hour and a half - run
+      # 32996264931 reached 91% of the feed in 78 minutes - so anything under
+      # that guarantees the first run dies before it can write a cache, and a
+      # cache that is never written is a gate that never runs. 110 gives one
+      # cold run room to finish and still bounds a genuinely stuck one.
+      #
+      # This is a one-time cost per cache scope, not a per-run cost. Once an
+      # entry exists, a run inside the window makes no NVD call at all and this
+      # step is single-digit minutes; a run that crosses a window boundary asks
+      # only for the delta, which is a few thousand records even unauthenticated.
+      # Drop this back to about 20 the day an NVD_API_KEY exists.
+      #
+      # Note for whoever reads run 32996264931: it was not killed by a timeout.
+      # It was cancelled by cancel-in-progress above when the next push landed,
+      # which is also why it saved nothing. The first cold run needs a quiet
+      # branch to finish on.
       - name: Dependency-Check
+        timeout-minutes: 110
         env:
-          # Unset is survivable - the plugin falls back to unauthenticated NVD
-          # access, which is rate-limited but works. Add the secret to make it
-          # usable rather than merely possible.
+          # Unset today, and the cache above is what makes that survivable
+          # rather than merely possible. Unauthenticated NVD access is throttled
+          # to roughly 5 requests per 30 seconds against about 50 with a key -
+          # the difference between a few minutes and an hour and a half to build
+          # the database from empty. The earlier claim here that unauthenticated
+          # access simply "works" did not survive contact with a real run.
+          #
+          # The shape of the fix follows from that: pay the long download once
+          # per cache scope, then keep the result long enough that no ordinary
+          # run has to talk to NVD at all. If a key is ever obtained, set this
+          # secret and lower timeout-minutes above - nothing else needs to move.
+          # Requests: https://nvd.nist.gov/developers/request-an-api-key
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         # The threshold and the suppressions live in the POM and in
-        # backend/dependency-check-suppressions.xml, so this command behaves the
-        # same on a laptop as it does here.
-        run: ./mvnw -B -ntp -Psecurity-scan dependency-check:check
+        # backend/dependency-check-suppressions.xml, so the gate itself judges a
+        # laptop and this runner identically. Only the two flags below are
+        # CI-specific: where the database sits, because that is what the cache
+        # above keys on, and how long the plugin trusts it before going back to
+        # NVD. A laptop goes on using the defaults - the plugin's own directory
+        # under ~/.m2, refreshed every 4 hours.
+        #
+        # nvdValidForHours=72 against a default of 4. It is a real trade: a CVE
+        # published on Monday may not be visible here until Thursday. What it
+        # buys is the step itself - inside the window there is no NVD call to be
+        # throttled, stalled or cancelled, which is the failure this whole block
+        # exists to prevent, and a gate that finishes three days behind catches
+        # strictly more than one that never finishes at all. Note this bounds how
+        # stale the data is, not how late the gate runs: the argument above about
+        # not first meeting a CVE on a merge to main is about when this step
+        # fires, and that is still every push.
+        run: >-
+          ./mvnw -B -ntp -Psecurity-scan dependency-check:check
+          -DdataDirectory="$HOME/.dependency-check-data"
+          -DnvdValidForHours=72
 
       - name: Upload the vulnerability report
         if: always()
