@@ -148,7 +148,7 @@ if [ "$OWN_CLUSTER" = "1" ]; then
   step "3. The real manifests"
   # -n "$NS" rather than a namespace inside each file. The manifests carry no
   # namespace, so the same four files deploy to `crm` here and to a
-  # course-cluster namespace like `student02` with no edit.
+  # course-cluster namespace like `studentNN` with no edit.
   kubectl -n "$NS" apply \
     -f k8s/configmap.yaml \
     -f k8s/service.yaml \
