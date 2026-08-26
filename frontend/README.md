@@ -1,4 +1,4 @@
-# Frontend — Northstar CRM
+# Frontend — Neural
 
 React + **TypeScript** (Vite) admin UI for the capstone, modeled on the
 "Customer Management Screens" mockup. Plain CSS, no UI/router/chart libraries —
@@ -23,6 +23,8 @@ too for the real screens to show live data.
 npm run dev      # dev server
 npm run build    # tsc -b && vite build (typecheck + production build)
 npm test         # vitest
+npm run test:ci  # one non-watch Vitest run
+npm run test:e2e # Playwright journey; requires PostgreSQL and Kafka
 ```
 
 ## Screens
@@ -33,10 +35,11 @@ npm test         # vitest
 | 1 | Customer List (search, status filter, pagination) | **Real** — `GET /api/customers` |
 | 2 | Customer Details (Overview tab) | **Real** — `GET /api/customers/{id}` |
 | 2 | Details → Activities tab (record interaction) | **Real** — `POST /api/interactions` |
+| 2 | Details → Activities tab (interaction history) | **Real** — `GET /api/customers/{id}/interactions` |
 | 3 | Add Customer | **Real** — `POST /api/customers` |
-| 3 | Edit Customer | read-only (no `PUT` endpoint on the backend yet) |
+| 3 | Edit Customer | **Real** — `PUT /api/customers/{id}` |
 | 4 | Contacts | ⚠️ **Demo data** — no backend endpoint |
-| 5 | Activities history | ⚠️ **Demo data** — no GET to list interactions |
+| 5 | Global Activities screen | ⚠️ **Demo data** — no global activity endpoint |
 | 6 | Reports (KPIs + charts) | ⚠️ **Demo data** — no aggregation endpoint |
 
 Every screen driven by mock data shows a visible **◇ Demo data** tag so
@@ -62,9 +65,11 @@ src/
 
 - `GET /api/customers` → `CustomerResponseDTO[]`
 - `GET /api/customers/{customerId}` → `CustomerResponseDTO`
+- `GET /api/customers/{customerId}/interactions` → `InteractionResponseDTO[]`
 - `POST /api/customers` ← `CustomerRequestDTO { customerId, fullName, email, phone?, status }`
-- `POST /api/interactions` ← `CreateInteractionRequest { customerId, channel, notes }` (202, fire-and-forget)
+- `PUT /api/customers/{customerId}` ← `CustomerUpdateDTO`
+- `POST /api/interactions` ← `CreateInteractionRequest { customerId, channel, notes }` (202, saved then published)
 
 ## Stack
 
-Vite + React 18 + TypeScript, Vitest. No extra dependencies.
+Vite + React 18 + TypeScript, Vitest, and Playwright.

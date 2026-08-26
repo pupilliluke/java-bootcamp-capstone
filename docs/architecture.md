@@ -3,6 +3,11 @@
 What the system is today, not what it is planned to become. Anything not yet
 built is listed under [Gaps](#gaps) rather than drawn as if it exists.
 
+Start with the [system context view](architecture/context.md) for the CRM as one
+box, its external participants, and its trust boundaries. The views below open
+that box to show its containers, request paths, messaging, persistence, and
+deployment.
+
 ## Container view
 
 ```mermaid
@@ -112,25 +117,26 @@ Consequences worth knowing:
 | Deleting the repository | kept — the volume is not in the working tree |
 | `mvn test` | untouched — tests run on in-memory H2 |
 
-The container currently holds two tables: `app_user` and `flyway_schema_history`.
-Flyway creates and tracks both, so a wiped volume rebuilds itself on the next
+The container currently holds `app_user`, `interaction`, and
+`flyway_schema_history`. Flyway creates and tracks them, so a wiped volume rebuilds itself on the next
 startup and the seeder re-adds `agent1` and `admin1`.
 
 ## Messaging: today and the target
 
 ### Today
 
-Every box below exists and works. What is missing is anywhere for the data to
-land: the service validates, publishes, and returns, and the consumer logs. If
-Kafka's retention window passes, the interaction is gone, and nothing can answer
-"what interactions has this customer had?"
+The synchronous path now validates the customer, saves the interaction, and
+publishes its event. A nested GET reads the durable row back for the customer.
+The remaining messaging gaps are the outbox and a durable consumer side effect.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
 flowchart TB
   Ctrl["InteractionController, POST /api/interactions"]
+  Read["GET /api/customers/{id}/interactions"]
   Svc["InteractionService.createAndPublish"]
   Cust["CustomerService, in-memory map, validation only"]
+  IntT[("interaction table")]
   Prod["InteractionEventProducer"]
   Topic[["topic crm.interaction.v1"]]
   Cons["InteractionEventConsumer"]
@@ -141,6 +147,8 @@ flowchart TB
 
   Ctrl --> Svc
   Svc -- "customer exists?" --> Cust
+  Svc -- "insert before publish" --> IntT
+  Read --> IntT
   Svc --> Prod
   Prod --> Topic
   Topic --> Cons
@@ -152,9 +160,9 @@ flowchart TB
 
 ### Target
 
-Two changes carry almost all the value. The service writes the interaction
-inside a transaction before publishing, and the consumer does something durable
-so that its idempotency guarantee protects something real.
+The first high-value change—writing the interaction inside a transaction before
+publishing—is complete. The target still adds an outbox and gives the consumer
+a durable side effect so its idempotency guarantee protects something real.
 
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
@@ -189,7 +197,7 @@ flowchart TB
 
 | | Today | Target | Why |
 | ---- | ----- | ------ | --- |
-| Interaction record | none | row in `interaction`, written before publishing | The rubric asks for durable interactions with verified persistence. Today a `202 Accepted` makes it look saved when nothing was. |
+| Interaction record | row in `interaction`, written before publishing and exposed by GET | keep this behavior | The browser journey now verifies persistence instead of trusting a `202 Accepted`. |
 | Customer lookup | in-memory map | `customer` table | Survives a restart. Also what Lab 50's UI-to-database flow needs. |
 | Publish | directly from the service | outbox row, published by a relay | Writing the row and publishing separately is a dual write: the transaction can commit and the publish fail, leaving the database and the log disagreeing. One transaction removes the gap. |
 | Idempotency store | `ConcurrentHashMap` | `processed_event` table | Per-JVM state is per-replica state. With more than one pod, each has its own set, and the exactly-once guarantee stops holding. |
@@ -267,16 +275,14 @@ tests exercise is the schema that ships.
 
 Not yet built, listed so the diagram is not read as a plan:
 
-- **Customers and interactions are still in memory.** `CustomerRepository` is a
-  `ConcurrentHashMap` and holds a TODO to become a JPA repository. Only
-  authentication is persisted.
-- **No frontend route for interactions reaches the backend.** The UI posts to
-  `/api/customers/{id}/interactions` with `{channel, summary}`; the API serves
-  `/api/interactions` with `{customerId, channel, notes}`. Every attempt 404s.
-- **No `/api/admin` handler.** The RBAC rule exists and is tested, but nothing is
-  mapped beneath it.
-- **No CI pipeline, container image, or Kubernetes manifests.** `k8s/` and
-  `infra/` do not exist yet.
-- **A missing route returns 500, not 404.** The catch-all
-  `@ExceptionHandler(Exception.class)` swallows Spring's `NoResourceFoundException`
-  and reports it as a server error, leaking the requested path.
+- **Customers are still in memory.** `CustomerRepository` is a
+  `ConcurrentHashMap`, so interaction rows use an indexed customer business key
+  until the customer table exists and can provide a foreign key.
+- **The publish is still a dual write.** The interaction row and direct Kafka
+  send are not one atomic resource; the outbox shown above remains the target.
+- **Consumer idempotency is still in memory.** It protects a log statement, not
+  a durable audit row.
+- **Nothing deploys from the pipeline yet.** The container image is built and
+  checked on every pull request — `backend/Dockerfile`, hadolint,
+  container-structure-test, trivy, and `ContainerImageIT` — but no job publishes
+  it to a registry or applies it to a cluster.
