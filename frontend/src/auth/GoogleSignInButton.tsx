@@ -1,11 +1,35 @@
 import { useEffect, useRef } from 'react'
 import { GOOGLE_CLIENT_ID } from '../config'
 
-// Renders the official "Sign in with Google" button once the GIS script has
-// loaded, and hands the returned ID token back through onCredential. The script
-// is loaded async in index.html, so it may not be ready at mount; we poll for a
-// short window rather than assume it, and give up quietly if it never arrives
-// (e.g. offline) so the password form is still usable.
+const GSI_SRC = 'https://accounts.google.com/gsi/client'
+
+// Inject the Google Identity Services script on demand and resolve once it is
+// ready. Loading it here rather than from a static tag in index.html means a
+// build with Google Sign-In disabled (e.g. the e2e run, which never mounts this
+// component) never fetches the third-party script at all.
+function loadGsiScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve()
+      return
+    }
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${GSI_SRC}"]`)
+    if (!script) {
+      script = document.createElement('script')
+      script.src = GSI_SRC
+      script.async = true
+      document.head.appendChild(script)
+    }
+    script.addEventListener('load', () => resolve(), { once: true })
+    script.addEventListener('error', () => reject(new Error('Google script failed to load')), {
+      once: true,
+    })
+  })
+}
+
+// Renders the official "Sign in with Google" button once GIS is ready, and hands
+// the returned ID token back through onCredential. Gives up quietly if the script
+// cannot load (e.g. offline) so the password form is still usable.
 export default function GoogleSignInButton({
   onCredential,
   onError,
@@ -22,21 +46,14 @@ export default function GoogleSignInButton({
 
   useEffect(() => {
     let cancelled = false
-    let attempts = 0
 
     function render() {
       if (cancelled) return
       const google = window.google
       if (!google || !containerRef.current) {
-        // ~5s of 100ms polls before giving up.
-        if (attempts++ > 50) {
-          onErrorRef.current?.('Google Sign-In is unavailable right now.')
-          return
-        }
-        window.setTimeout(render, 100)
+        onErrorRef.current?.('Google Sign-In is unavailable right now.')
         return
       }
-
       google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: (response) => onCredentialRef.current(response.credential),
@@ -54,7 +71,10 @@ export default function GoogleSignInButton({
       })
     }
 
-    render()
+    loadGsiScript()
+      .then(render)
+      .catch(() => onErrorRef.current?.('Google Sign-In is unavailable right now.'))
+
     return () => {
       cancelled = true
     }

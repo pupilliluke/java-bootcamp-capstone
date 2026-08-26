@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/ApiError'
 import GoogleSignInButton from '../auth/GoogleSignInButton'
+import { GSI_ENABLED } from '../config'
 
 type Mode = 'signin' | 'register'
 const MIN_PASSWORD = 12
@@ -204,13 +205,17 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
               {submitting ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
-          <div
-            className="login-or"
-            style={{ textAlign: 'center', margin: '0.85rem 0 0.6rem', opacity: 0.6, fontSize: '0.8rem' }}
-          >
-            or
-          </div>
-          <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} />
+          {GSI_ENABLED && (
+            <>
+              <div
+                className="login-or"
+                style={{ textAlign: 'center', margin: '0.85rem 0 0.6rem', opacity: 0.6, fontSize: '0.8rem' }}
+              >
+                or
+              </div>
+              <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} />
+            </>
+          )}
           </>
         ) : (
           <form onSubmit={handleRegister}>

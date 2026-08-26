@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import LoginPage from './LoginPage'
 
 // useAuth is the only dependency; stub it so no real auth/network runs.
@@ -48,5 +48,23 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument()
     // Disabled until username + email + 12-char matching passwords are present.
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled()
+  })
+})
+
+describe('LoginPage with Google Sign-In disabled', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('omits the Google button entirely when VITE_ENABLE_GSI is false', async () => {
+    // The flag is read at module load, so stub the env then re-import the page.
+    vi.stubEnv('VITE_ENABLE_GSI', 'false')
+    vi.resetModules()
+    const { default: FreshLoginPage } = await import('./LoginPage')
+
+    render(<FreshLoginPage />)
+    expect(screen.getByRole('button', { name: /^sign in$/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Sign in with Google')).not.toBeInTheDocument()
   })
 })
