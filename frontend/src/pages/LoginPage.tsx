@@ -80,7 +80,7 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
       <div className="login-card">
         <div className="login-brand">
           <span className="login-logo">★</span>
-          <h1>Northstar CRM</h1>
+          <h1>Neural</h1>
           <span className="sub">
             {mode === 'signin' ? 'Sign in to your workspace' : 'Create your account'}
           </span>

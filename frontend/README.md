@@ -1,4 +1,4 @@
-# Frontend — Northstar CRM
+# Frontend — Neural
 
 React + **TypeScript** (Vite) admin UI for the capstone, modeled on the
 "Customer Management Screens" mockup. Plain CSS, no UI/router/chart libraries —
