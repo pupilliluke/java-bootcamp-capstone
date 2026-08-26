@@ -11,11 +11,16 @@
   --muted: #6b7684;
   --faint: #9aa4b2;
 
-  --navy: #0f2f56;
-  --navy-2: #123963;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-soft: #eaf1ff;
+  /* PNC brand palette: blue #0069AA primary, orange #F58025 accent (#55). */
+  --navy: #003f6b;
+  --navy-2: #005c96;
+  --primary: #0069aa;
+  --primary-hover: #00588f;
+  --primary-soft: #e3f0f8;
+
+  --accent: #f58025;
+  --accent-hover: #d96c15;
+  --accent-soft: #fdecdb;
 
   --green: #16794c;
   --green-soft: #e6f6ec;
@@ -26,8 +31,8 @@
   --slate: #5c6670;
   --slate-soft: #eef1f5;
 
-  --radius: 10px;
-  --radius-sm: 8px;
+  --radius: 3px;
+  --radius-sm: 2px;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 4px 12px rgba(16, 24, 40, 0.1);
 }
@@ -81,8 +86,9 @@ h1, h2, h3, h4 {
 .sidebar-brand .logo {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
   display: grid;
   place-items: center;
   font-size: 1.1rem;
@@ -269,7 +275,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   width: 30px; height: 30px;
   display: inline-grid; place-items: center;
   background: transparent; border: none; color: var(--muted);
-  border-radius: 6px;
+  border-radius: 2px;
 }
 .btn-icon:hover { background: var(--slate-soft); color: var(--text); }
 
@@ -306,7 +312,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .badge {
   display: inline-block;
   padding: 0.15rem 0.6rem;
-  border-radius: 999px;
+  border-radius: 3px;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -366,7 +372,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .profile-head { display: flex; align-items: center; gap: 1rem; }
 .avatar {
   width: 60px; height: 60px;
-  border-radius: 14px;
+  border-radius: 4px;
   background: var(--primary-soft);
   color: var(--primary);
   display: grid; place-items: center;
@@ -449,7 +455,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 }
 .kpi-tile .label { color: var(--muted); font-size: 0.8rem; font-weight: 600; }
 .kpi-tile .value { font-size: 1.9rem; font-weight: 800; margin-top: 0.2rem; }
-.kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; }
+.kpi-icon { width: 40px; height: 40px; border-radius: 4px; display: grid; place-items: center; }
 .kpi-icon.blue { background: var(--primary-soft); color: var(--primary); }
 .kpi-icon.green { background: var(--green-soft); color: var(--green); }
 .kpi-icon.red { background: var(--red-soft); color: var(--red); }
@@ -487,7 +493,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
   display: inline-flex; align-items: center; gap: 0.4rem;
   background: var(--amber-soft); color: var(--amber);
   font-size: 0.72rem; font-weight: 700;
-  padding: 0.2rem 0.6rem; border-radius: 999px;
+  padding: 0.2rem 0.6rem; border-radius: 3px;
 }
 .spinner-row { padding: 2rem; text-align: center; color: var(--muted); }
 
@@ -497,7 +503,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
   display: grid;
   place-items: center;
   padding: 2rem 1rem;
-  background: radial-gradient(1100px 520px at 50% -12%, #163a66 0%, var(--bg) 58%);
+  background: radial-gradient(1100px 520px at 50% -12%, #004b7a 0%, var(--bg) 58%);
 }
 
 .login-card {
@@ -505,7 +511,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
   max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 3px;
   box-shadow: var(--shadow-lg);
   padding: 2rem 1.75rem 1.75rem;
 }
@@ -521,8 +527,8 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .login-logo {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, var(--navy-2), var(--navy));
+  border-radius: 4px;
+  background: var(--accent);
   color: #fff;
   display: grid;
   place-items: center;
