@@ -121,8 +121,15 @@ wait_for_ingress() {
 if [ "$OWN_CLUSTER" = "1" ]; then
 
   step "1. Namespace and the test database"
-  kubectl apply -f k8s/namespace.yaml
-  kubectl apply -f k8s/test/postgres.yaml
+  # namespace.yaml declares `crm`, which is what k3d and CI use, so the normal
+  # path still exercises the real file. An overridden NS means that file is the
+  # wrong one -- applying it would create a namespace nothing else then uses.
+  if [ "$NS" = "crm" ]; then
+    kubectl apply -f k8s/namespace.yaml
+  else
+    kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+  fi
+  kubectl -n "$NS" apply -f k8s/test/postgres.yaml
   # Generous, because the first run on a cold cluster pulls ~400MB of postgres:17
   # before anything can start. Measured: 180s was not enough on a laptop k3d.
   # `k3d image import postgres:17 -c <cluster>` makes reruns instant.
@@ -139,7 +146,10 @@ if [ "$OWN_CLUSTER" = "1" ]; then
   pass "Secret created without touching a file"
 
   step "3. The real manifests"
-  kubectl apply \
+  # -n "$NS" rather than a namespace inside each file. The manifests carry no
+  # namespace, so the same four files deploy to `crm` here and to a
+  # course-cluster namespace like `student02` with no edit.
+  kubectl -n "$NS" apply \
     -f k8s/configmap.yaml \
     -f k8s/service.yaml \
     -f k8s/deployment.yaml \
