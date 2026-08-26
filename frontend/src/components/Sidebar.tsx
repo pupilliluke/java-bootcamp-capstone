@@ -85,7 +85,7 @@ export default function Sidebar({current, navigate, isAdmin, }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
-        <span className="logo">★</span>
+        <span className="logo"><img className="brand-img" src="/pnc-monkey.png" alt="" /></span>
         <span>Neural</span>
       </div>
       <nav className="nav">

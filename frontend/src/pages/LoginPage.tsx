@@ -1,10 +1,61 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/ApiError'
 
 type Mode = 'signin' | 'register'
 const MIN_PASSWORD = 12
+
+// Decorative liquid-blob backdrop behind the login card. Purely visual: it is
+// aria-hidden and pointer-events:none, and deliberately does NOT react to the
+// mouse — the positions are fixed per mount so the animation is calm, not
+// interactive. The gooey SVG filter melts the blurred blobs into one another.
+function LoginBackdrop() {
+  const blobs = useMemo(
+    () =>
+      Array.from({ length: 6 }).map(() => ({
+        size: Math.random() * 200 + 160,
+        left: Math.random() * 80 + 10,
+        top: Math.random() * 80 + 10,
+        delay: Math.random() * -20,
+        duration: Math.random() * 15 + 18,
+      })),
+    [],
+  )
+
+  return (
+    <div className="login-stage" aria-hidden="true">
+      <svg className="login-svg-filter" focusable="false">
+        <defs>
+          <filter id="login-goo">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
+            <feColorMatrix
+              in="blur"
+              mode="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9"
+              result="goo"
+            />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" />
+          </filter>
+        </defs>
+      </svg>
+      {blobs.map((b, i) => (
+        <div
+          key={i}
+          className={i % 2 === 0 ? 'login-blob' : 'login-blob login-blob--blue'}
+          style={{
+            width: `${b.size}px`,
+            height: `${b.size}px`,
+            left: `${b.left}%`,
+            top: `${b.top}%`,
+            animationDelay: `${b.delay}s`,
+            animationDuration: `${b.duration}s`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 export default function LoginPage({ expired = false }: { expired?: boolean }) {
   const { login } = useAuth()
@@ -77,9 +128,10 @@ export default function LoginPage({ expired = false }: { expired?: boolean }) {
 
   return (
     <main className="login-wrap">
+      <LoginBackdrop />
       <div className="login-card">
         <div className="login-brand">
-          <span className="login-logo">★</span>
+          <span className="login-logo"><img className="brand-img" src="/pnc-monkey.png" alt="" /></span>
           <h1>Neural</h1>
           <span className="sub">
             {mode === 'signin' ? 'Sign in to your workspace' : 'Create your account'}
