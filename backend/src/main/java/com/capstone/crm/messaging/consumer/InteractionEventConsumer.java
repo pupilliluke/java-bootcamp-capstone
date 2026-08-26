@@ -1,7 +1,6 @@
 package com.capstone.crm.messaging.consumer;
 
 import com.capstone.crm.messaging.event.InteractionEvent;
-import com.capstone.crm.messaging.producer.InteractionEventProducer;
 import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
@@ -21,7 +20,10 @@ public class InteractionEventConsumer {
         this.eventHandler = eventHandler;
     }
 
-    @KafkaListener(topics = InteractionEventProducer.TOPIC)
+    // The same property the producer reads, resolved by Spring before the
+    // listener is created. Both ends move together when the topic is
+    // prefixed for the shared broker; neither can be renamed alone.
+    @KafkaListener(topics = "${crm.messaging.interaction-topic}")
     public void consume(InteractionEvent event) {
         validate(event);
         MDC.put(CORRELATION_ID_MDC_KEY, event.correlationId());
