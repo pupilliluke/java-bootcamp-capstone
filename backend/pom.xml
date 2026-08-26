@@ -6,7 +6,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.5</version>
+    <version>3.5.16</version>
     <relativePath/>
   </parent>
   <groupId>com.capstone</groupId>
@@ -15,6 +15,8 @@
   <name>crm-backend</name>
   <properties>
     <java.version>21</java.version>
+    <dependency-check.version>10.0.4</dependency-check.version>
+    <tomcat.version>10.1.59</tomcat.version>
 
     <!-- ContainerImageIT tests a built Docker image, so it needs one to exist.
          The ordinary build has no reason to have built it, and a test that
@@ -192,6 +194,32 @@
       <properties>
         <failsafe.excluded.tests>nothing-is-excluded-under-this-profile</failsafe.excluded.tests>
       </properties>
+    </profile>
+    <profile>
+      <id>security-scan</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>${dependency-check.version}</version>
+            <configuration>
+              <formats><format>HTML</format><format>JSON</format></formats>
+              <failBuildOnCVSS>7</failBuildOnCVSS>
+              <!-- OSS Index needs a Sonatype account. Unauthenticated it returns
+                   401, and the analyzer turns that into an AnalysisException that
+                   fails the build for a reason unrelated to any vulnerability -
+                   a gate that goes red because a third party rate-limited us is
+                   not a gate. NVD is the primary source and needs no account. -->
+              <ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+              <nvdApiKeyEnvironmentVariable>NVD_API_KEY</nvdApiKeyEnvironmentVariable>
+              <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+              <outputDirectory>${project.basedir}/../reports</outputDirectory>
+            </configuration>
+            <executions><execution><goals><goal>check</goal></goals></execution></executions>
+          </plugin>
+        </plugins>
+      </build>
     </profile>
   </profiles>
 </project>

@@ -92,6 +92,37 @@ jobs:
             backend/target/surefire-reports/**
             backend/target/failsafe-reports/**
 
+      # Answers a different question from the trivy scan in the image job. Trivy
+      # looks at the built container; this looks at the dependency tree Maven
+      # resolves, so it sees things that never reach an image layer and it runs
+      # without waiting for a build.
+      #
+      # Pull requests included, deliberately. The finding set moves when the world
+      # moves rather than when the diff does, which is an argument for running it
+      # often rather than an argument for running it late: a CVE published on
+      # Tuesday should not first appear on a merge to main.
+      #
+      # continue-on-error is deliberately NOT set. A High or worse finding stops
+      # the build. Without that this is a report, and the rubric's Exemplary
+      # descriptor asks for a gate.
+      - name: Dependency-Check
+        env:
+          # Unset is survivable - the plugin falls back to unauthenticated NVD
+          # access, which is rate-limited but works. Add the secret to make it
+          # usable rather than merely possible.
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        # The threshold and the suppressions live in the POM and in
+        # backend/dependency-check-suppressions.xml, so this command behaves the
+        # same on a laptop as it does here.
+        run: ./mvnw -B -ntp -Psecurity-scan dependency-check:check
+
+      - name: Upload the vulnerability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports/**
+
   frontend:
     name: frontend
     runs-on: ubuntu-latest
