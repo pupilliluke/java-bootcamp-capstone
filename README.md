@@ -65,12 +65,13 @@ Customer data is stored in memory and resets when the application restarts.
 - Save each accepted interaction before publishing its event.
 - Read a customer's interactions through `GET /api/customers/{customerId}/interactions`.
 - Create a Kafka event with a UUID event ID, interaction ID, event type, version, timestamp, customer ID, channel, and notes.
-- Publish events to the versioned topic `crm.interaction.v1`.
+- Publish events to the versioned topic named by `CRM_INTERACTION_TOPIC`, `crm.interaction.v1` by default.
 - Use `customerId` as the Kafka message key to preserve ordering for one customer.
-- Consume events with the `crm-interaction-service-v1` consumer group.
+- Consume events with the group named by `CRM_CONSUMER_GROUP`, `crm-interaction-service-v1` by default.
+- Prefix both with your namespace on a shared broker, so teams do not read each other's events.
 - Skip duplicate events with an in-memory processed-event store keyed by `eventId`.
 - Retry processing failures twice with a one-second delay.
-- Send unrecoverable events to `crm.interaction.v1.DLT`.
+- Send unrecoverable events to the topic's `.DLT`, derived from the topic so a prefix carries over.
 - Send invalid events and unsupported event versions directly to the dead-letter topic.
 - Log successfully processed interaction events through the current consumer handler.
 

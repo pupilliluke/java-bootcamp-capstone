@@ -157,7 +157,41 @@ if [ "$OWN_CLUSTER" = "1" ]; then
   fi
   kubectl -n "$NS" rollout restart deploy/crm-api
   kubectl -n "$NS" rollout status deploy/crm-api --timeout="$ROLLOUT_TIMEOUT"
-  pass "Deployment rolled out"
+
+  # rollout status answers "is the new pod Ready", which is not the same
+  # question as "is the old one gone" -- and between those two facts the Service
+  # lists both.
+  #
+  # The ConfigMap patch above is what makes that window unavoidable. envFrom is
+  # read only at container start, so the patch needs a restart, and that restart
+  # overlaps the rollout `kubectl apply` has already begun. Both ReplicaSets
+  # scale up inside the same second and both pods pass readiness, so Traefik
+  # briefly holds two endpoints -- one of which Kubernetes is about to kill.
+  #
+  # A request routed to the terminating pod comes back 502. That is what failed
+  # the anonymous read on runs 33006630567 and 33007421293, having passed
+  # readiness, login and the authenticated read moments earlier: those three
+  # poll, and the last two assertions are single-shot.
+  #
+  # Waiting for the count to settle fixes the cause. Teaching each assertion to
+  # retry a 502 would only hide it, and would blind the checks in steps 5 and 6
+  # to a 502 that is real.
+  settled=""
+  for _ in $(seq 1 40); do
+    if [ "$(kubectl -n "$NS" get pods -l app=crm-api --no-headers 2>/dev/null | wc -l | tr -d ' ')" = "1" ]; then
+      settled="yes"
+      break
+    fi
+    sleep 3
+  done
+  # Not a failure: a future replicas > 1 would legitimately never reach one pod.
+  # Silence would be worse than either -- the run should say which it got.
+  if [ -n "$settled" ]; then
+    pass "Deployment rolled out, one pod serving"
+  else
+    pass "Deployment rolled out (more than one pod still present after 120s)"
+    kubectl -n "$NS" get pods -l app=crm-api --no-headers | sed 's/^/     /'
+  fi
 
 else
   # Every line of steps 1 to 3 assumes this script owns the cluster. On the

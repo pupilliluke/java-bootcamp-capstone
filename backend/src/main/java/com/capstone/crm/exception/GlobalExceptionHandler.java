@@ -34,11 +34,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(DuplicateCustomerException.class)
-    public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateCustomerException ex) {
-        return build(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
     @ExceptionHandler({DuplicateUserException.class, SelfUserModificationException.class,
             LastAdminException.class})
     public ResponseEntity<Map<String, Object>> handleUserConflict(RuntimeException ex) {
