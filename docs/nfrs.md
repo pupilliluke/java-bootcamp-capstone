@@ -1,4 +1,4 @@
-# Non-Functional Requirements — Northstar CRM
+# Non-Functional Requirements — Neural
 
 > Measurable quality targets for the Customer Management Platform (issue #37).
 > Every NFR states a **metric + target + how it is measured + environment**. No vague
