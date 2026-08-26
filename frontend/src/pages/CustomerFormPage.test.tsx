@@ -31,13 +31,41 @@ describe('CustomerFormPage', () => {
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
   })
 
-  it('enables Save once id, name and email are entered', async () => {
+  it('enables Save once name and email are entered', async () => {
     const user = userEvent.setup()
     render(<CustomerFormPage navigate={navigate} onCreated={onCreated} />)
-    await user.type(screen.getByPlaceholderText('CUS-1006'), 'CUS-1009')
     await user.type(screen.getByPlaceholderText('Acme Corporation'), 'Test Co')
     await user.type(screen.getByPlaceholderText('info@acme.com'), 'test@example.com')
     expect(screen.getByRole('button', { name: /^save$/i })).toBeEnabled()
+  })
+
+  // The id is server-assigned now (CUS-1003, ...) — there is nothing to type
+  // in on the create form, and nothing to show until the server responds.
+  it('does not show a Customer ID field on the create form', () => {
+    render(<CustomerFormPage navigate={navigate} onCreated={onCreated} />)
+    expect(screen.queryByText('Customer ID')).not.toBeInTheDocument()
+  })
+
+  it('creates through create, then navigates to the server-assigned id', async () => {
+    create.mockResolvedValue({
+      customerId: 'CUS-1010',
+      fullName: 'Test Co',
+      email: 'test@example.com',
+      status: 'ACTIVE',
+    })
+    const user = userEvent.setup()
+    render(<CustomerFormPage navigate={navigate} onCreated={onCreated} />)
+
+    await user.type(screen.getByPlaceholderText('Acme Corporation'), 'Test Co')
+    await user.type(screen.getByPlaceholderText('info@acme.com'), 'test@example.com')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({ fullName: 'Test Co', email: 'test@example.com' }),
+      ),
+    )
+    expect(navigate).toHaveBeenCalledWith({ name: 'details', customerId: 'CUS-1010' })
   })
 
   it('prefills the form and allows saving in edit mode', () => {
@@ -68,21 +96,19 @@ describe('CustomerFormPage', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  // The server refuses an agent who picks CLOSED in the status dropdown. The
-  // form has to say so — a save that quietly does nothing reads as a broken
-  // button, and the user retries instead of asking an admin.
+  // Whatever reason the server gives for refusing a save, the form has to say
+  // so — a save that quietly does nothing reads as a broken button.
   it('shows the reason when the server refuses the save', async () => {
     update.mockRejectedValue(
-      new ApiError('Only an administrator can close a customer', 'http', 403),
+      new ApiError('Email already in use by another customer', 'http', 409),
     )
     const user = userEvent.setup()
     render(<CustomerFormPage navigate={navigate} onCreated={onCreated} edit={editCustomer} />)
 
-    await user.selectOptions(screen.getByRole('combobox'), 'CLOSED')
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      /only an administrator can close a customer/i,
+      /email already in use by another customer/i,
     )
     // Still on the form, with the input preserved, rather than navigated away.
     expect(navigate).not.toHaveBeenCalled()
