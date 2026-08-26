@@ -2,7 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: crm-api
-  namespace: crm
+  # No namespace: on purpose. `kubectl -n <ns> apply` decides where this lands,
+  # so the same file serves the CI cluster's `crm` and a course-cluster namespace
+  # like `studentNN` with no edit. A hardcoded namespace here would also make
+  # `kubectl -n studentNN apply -f` fail outright rather than quietly do the
+  # wrong thing -- kubectl refuses when the flag and the file disagree.
   labels:
     app: crm-api
 spec:

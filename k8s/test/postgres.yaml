@@ -13,7 +13,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: crm
   labels:
     app: postgres
     role: test-fixture
@@ -52,7 +51,6 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: crm
   labels:
     app: postgres
     role: test-fixture

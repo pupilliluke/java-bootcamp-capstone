@@ -6,6 +6,17 @@
 # committed. Only the shape lives here.
 spring:
   datasource:
-    url: jdbc:postgresql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:5432}/${LOCAL_DB_NAME}
+    # The trailing options segment defaults to empty, so this URL is byte for
+    # byte what it was for docker-compose and for CI. It exists for the course
+    # cluster, where one database `bootcamp` is shared and each student owns a
+    # schema inside it, and the credentials sheet gives the URL with
+    # ?currentSchema=studentNN on the end.
+    #
+    # Relying on the role's default search_path would probably work -- each role
+    # is set up to find its own schema first. Probably is doing a lot of work in
+    # that sentence for something that decides where Flyway creates tables, and
+    # the cost of being explicit is one optional variable that is empty
+    # everywhere else.
+    url: jdbc:postgresql://${LOCAL_DB_HOST:localhost}:${LOCAL_DB_PORT:5432}/${LOCAL_DB_NAME}${LOCAL_DB_URL_OPTIONS:}
     username: ${LOCAL_DB_USER}
     password: ${LOCAL_DB_PASSWORD}
