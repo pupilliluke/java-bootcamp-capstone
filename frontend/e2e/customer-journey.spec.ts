@@ -10,7 +10,9 @@ type ApiCall = {
 
 test('agent can create a customer, log an interaction, and read it back', async ({ page }, testInfo) => {
   const suffix = `${Date.now().toString(36)}-${testInfo.workerIndex}-${testInfo.retry}`
-  const customerId = `E2E-${suffix}`.toUpperCase()
+  // No customerId here — the server assigns it (CUS-1003, ...) on create, so
+  // it is captured from the create response below instead of chosen up front.
+  let customerId = ''
   const customerName = `E2E Customer ${suffix}`
   const customerEmail = `e2e-${suffix}@example.test`
   const interactionNotes = `E2E interaction ${suffix}`
@@ -74,7 +76,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
         .getByRole('button', { name: 'Add Customer', exact: true })
         .click()
 
-      await page.getByPlaceholder('CUS-1006').fill(customerId)
+      // No Customer ID field to fill — the server assigns it now.
       await page.getByPlaceholder('Acme Corporation').fill(customerName)
       await page.getByPlaceholder('info@acme.com').fill(customerEmail)
       await page.getByPlaceholder('(555) 123-4567').fill('555-0199')
@@ -89,6 +91,13 @@ test('agent can create a customer, log an interaction, and read it back', async 
       const createResponse = await createResponsePromise
       expect(createResponse.status()).toBe(201)
       expect(await createResponse.headerValue('x-correlation-id')).toBeTruthy()
+
+      // The id lives only in the response now — captured here rather than
+      // chosen before the request, since CustomerRequestDTO no longer accepts
+      // one.
+      customerId = (await createResponse.json()).customerId
+      expect(customerId).toMatch(/^CUS-\d+$/)
+
       await expect(page.getByRole('heading', { name: 'Customer Details' })).toBeVisible()
       await expect(page.getByText(customerId, { exact: true }).first()).toBeVisible()
       await expect(page.getByText(customerEmail, { exact: true }).first()).toBeVisible()

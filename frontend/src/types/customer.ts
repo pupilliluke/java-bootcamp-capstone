@@ -10,9 +10,9 @@ export interface Customer {
   createdAt?: string
 }
 
-// POST /api/customers body (CustomerRequestDTO).
+// POST /api/customers body (CustomerRequestDTO). No customerId, the server
+// assigns it and returns it on the created Customer.
 export interface CreateCustomer {
-  customerId: string
   fullName: string
   email: string
   phone?: string

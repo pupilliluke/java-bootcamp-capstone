@@ -17,6 +17,13 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class InteractionEventProducerTest {
 
+    // A prefixed name rather than the default, on purpose. If the topic is ever
+    // hardcoded back into the producer the send goes to crm.interaction.v1 and
+    // this fails, which is the regression worth catching -- the default is the
+    // one value that would let a collision through unnoticed on the shared
+    // broker.
+    private static final String TOPIC = "studentNN.crm.interaction.v1";
+
     @Mock
     private KafkaTemplate<String, InteractionEvent> kafkaTemplate;
 
@@ -24,16 +31,17 @@ class InteractionEventProducerTest {
     private ArgumentCaptor<InteractionEvent> eventCaptor;
 
     @Test
-    void publishesVersionOneEventToTheVersionedTopicUsingCustomerIdAsTheKey() {
+    void publishesVersionOneEventToTheConfiguredTopicUsingCustomerIdAsTheKey() {
         InteractionEvent event = InteractionEventFixtures.interactionCreated();
-        InteractionEventProducer producer = new InteractionEventProducer(kafkaTemplate);
+        InteractionEventProducer producer =
+                new InteractionEventProducer(kafkaTemplate, TOPIC);
 
         producer.publish(event);
         verify(kafkaTemplate).send(
-                eq(InteractionEventProducer.TOPIC),
+                eq(TOPIC),
                 eq(event.customerId()),
                 eventCaptor.capture());
-        assertThat(InteractionEventProducer.TOPIC).isEqualTo("crm.interaction.v1");
+        assertThat(producer.topic()).isEqualTo(TOPIC);
         assertThat(eventCaptor.getValue()).isEqualTo(event);
         assertThat(eventCaptor.getValue().version()).isEqualTo(1);
     }

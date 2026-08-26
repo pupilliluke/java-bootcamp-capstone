@@ -32,3 +32,20 @@ data:
   # the cluster until the broker advertises an address a pod can reach, or Kafka
   # runs in-cluster. Everything else -- login, customers, health -- works.
   KAFKA_BOOTSTRAP_SERVERS: "host.k3d.internal:9092"
+
+  # The local names, and both must change on the course cluster.
+  #
+  # That broker is one shared Kafka with no per-user topic isolation, and every
+  # team is building this same CRM. Left as they are, four deployments publish
+  # into crm.interaction.v1 and join crm-interaction-service-v1 together: each
+  # one then reads other teams' interactions and sees only a share of its own.
+  # Nothing errors, so nothing tells you.
+  #
+  # Prefix both with the namespace, matching the schema and namespace names:
+  #   CRM_INTERACTION_TOPIC: "studentNN.crm.interaction.v1"
+  #   CRM_CONSUMER_GROUP:    "studentNN.crm-interaction-service-v1"
+  #
+  # The dead letter topic needs no entry. KafkaConfig derives it from whatever
+  # the record's topic was, so a prefixed topic already gets a prefixed .DLT.
+  CRM_INTERACTION_TOPIC: "crm.interaction.v1"
+  CRM_CONSUMER_GROUP: "crm-interaction-service-v1"
