@@ -1,29 +1,42 @@
 import type { CreateInteraction, Interaction } from '../types/customer'
 import { http } from './http'
 
-// Backend contract (InteractionController): POST /api/interactions with a
-// CreateInteractionRequest { customerId, channel, notes }. Returns 202 Accepted
-// with an InteractionEvent. Fire-and-forget over Kafka — there is no GET to list
-// interactions, so the timeline is kept locally in the UI.
-interface InteractionEvent {
-  interactionId?: string
-  channel: string
+// POST returns an InteractionEvent and GET returns an InteractionResponseDTO.
+// Their durable interaction fields deliberately share the same shape.
+interface InteractionResponse {
+  interactionId: string
+  customerId: string
+  channel: Interaction['channel']
   notes: string
-  occurredAt?: string
+  occurredAt: string
 }
 
 export const interactionsApi = {
   async create(body: CreateInteraction, signal?: AbortSignal): Promise<Interaction> {
-    const event = await http<InteractionEvent>(
+    const event = await http<InteractionResponse>(
       '/api/interactions',
       { method: 'POST', body: JSON.stringify(body) },
       signal,
     )
-    return {
-      channel: body.channel,
-      notes: body.notes,
-      interactionId: event?.interactionId,
-      createdAt: event?.occurredAt ?? new Date().toISOString(),
-    }
+    return toInteraction(event)
   },
+
+  async list(customerId: string, signal?: AbortSignal): Promise<Interaction[]> {
+    const interactions = await http<InteractionResponse[]>(
+      `/api/customers/${encodeURIComponent(customerId)}/interactions`,
+      {},
+      signal,
+    )
+    return interactions.map(toInteraction)
+  },
+}
+
+function toInteraction(response: InteractionResponse): Interaction {
+  return {
+    interactionId: response.interactionId,
+    customerId: response.customerId,
+    channel: response.channel,
+    notes: response.notes,
+    createdAt: response.occurredAt,
+  }
 }

@@ -1,20 +1,43 @@
 package com.capstone.crm.entity;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+import java.time.Instant;
 import java.util.Objects;
 
+@Entity
+@Table(name = "customer")
 public class Customer {
+
+    @Id
+    @Column(name = "customer_id")
     private String customerId;
+
+    @Column(name = "full_name", nullable = false)
     private String fullName;
+
+    @Column(name = "email", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "phone")
     private String phone;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
     private CustomerStatus status;
-    private LocalDateTime createdAt;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
 
     public Customer() {}
 
     public Customer(String customerId, String fullName, String email, String phone,
-                    CustomerStatus status, LocalDateTime createdAt) {
+                    CustomerStatus status, Instant createdAt) {
         this.customerId = customerId;
         this.fullName = fullName;
         this.email = email;
@@ -25,12 +48,12 @@ public class Customer {
 
     public static Customer amina() {        //test customers
         return new Customer("CUS-1001", "Amina Khan", "amina.khan@example.com", null,
-                CustomerStatus.ACTIVE, LocalDateTime.now());
+                CustomerStatus.ACTIVE, Instant.now());
     }
 
     public static Customer ravi() {
         return new Customer("CUS-1002", "Ravi Singh", "ravi.singh@example.com", null,
-                CustomerStatus.PROSPECT, LocalDateTime.now());
+                CustomerStatus.PROSPECT, Instant.now());
     }
 
     public String getCustomerId() { return customerId; }
@@ -43,8 +66,8 @@ public class Customer {
     public void setPhone(String phone) { this.phone = phone; }
     public CustomerStatus getStatus() { return status; }
     public void setStatus(CustomerStatus status) { this.status = status; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 
     @Override
     public boolean equals(Object o) {

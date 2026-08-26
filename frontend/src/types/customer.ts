@@ -35,13 +35,12 @@ export interface CreateInteraction {
   notes: string
 }
 
-// 202 response (InteractionEvent) — plus a local `createdAt` for the timeline,
-// since the backend is fire-and-forget over Kafka and offers no GET to list.
 export interface Interaction {
+  interactionId: string
+  customerId: string
   channel: Channel
   notes: string
   createdAt: string
-  interactionId?: string
 }
 
 // ---- mock-only shapes (no backend endpoint exists) ----
