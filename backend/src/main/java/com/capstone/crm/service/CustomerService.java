@@ -9,19 +9,22 @@ import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
 import com.capstone.crm.exception.DuplicateCustomerException;
 import com.capstone.crm.repository.CustomerRepository;
-import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class CustomerService {
+
+    private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
     private final CustomerRepository customerRepository;
 
@@ -29,28 +32,32 @@ public class CustomerService {
         this.customerRepository = customerRepository;
     }
 
-    @PostConstruct
-    void seedDemoCustomers() {
-        customerRepository.save(new Customer(
-                "CUS-1001", "Amina Khan", "amina.khan@example.test", "555-0101",
-                CustomerStatus.ACTIVE, LocalDateTime.now()));
-        customerRepository.save(new Customer(
-                "CUS-1002", "Ravi Singh", "ravi.singh@example.test", "555-0102",
-                CustomerStatus.ACTIVE, LocalDateTime.now()));
+    // Ids are canonicalised here, at the only door into the repository, and
+    // ck_customer_id_upper in V3__customer.sql backs it up. A primary key is
+    // case-sensitive, so without this "cus-1006" and "CUS-1006" are separate
+    // customers that look identical to a person reading the screen.
+    //
+    // Trimmed as well as upper-cased: a trailing space is the same class of
+    // invisible difference, and pasting an id into a form is how it gets there.
+    private static String canonical(String customerId) {
+        return customerId == null ? null : customerId.trim().toUpperCase();
     }
 
     public CustomerResponseDTO create(CustomerRequestDTO request) {
-        if (customerRepository.existsById(request.customerId())) {
-            throw new DuplicateCustomerException("Duplicate customer: " + request.customerId());
+        String customerId = canonical(request.customerId());
+        if (customerRepository.existsById(customerId)) {
+            throw new DuplicateCustomerException("Duplicate customer: " + customerId);
         }
         Customer customer = CustomerMapper.toEntity(request);
-        customer.setCreatedAt(LocalDateTime.now());
+        customer.setCustomerId(customerId);
+        customer.setCreatedAt(Instant.now());
         Customer saved = customerRepository.save(customer);
+        log.info("Created customer {}", saved.getCustomerId());
         return CustomerMapper.toResponse(saved);
     }
 
     public CustomerResponseDTO get(String customerId) {
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         return CustomerMapper.toResponse(customer);
     }
@@ -62,8 +69,9 @@ public class CustomerService {
     }
 
     public CustomerResponseDTO update(String customerId, CustomerUpdateDTO request) {
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
+        CustomerStatus previousStatus = customer.getStatus();
 
         // Closing a customer is ADMIN-only, and delete() is not the only way to
         // do it. delete() is a soft delete — it just sets CLOSED — so guarding
@@ -82,6 +90,7 @@ public class CustomerService {
 
         CustomerMapper.applyUpdate(customer, request);
         Customer saved = customerRepository.save(customer);
+        log.info("Updated customer {} (status {} -> {})", customerId, previousStatus, saved.getStatus());
         return CustomerMapper.toResponse(saved);
     }
 
@@ -97,9 +106,10 @@ public class CustomerService {
     }
 
     public void delete(String customerId) {     //soft delete. just set to closed
-        Customer customer = customerRepository.findById(customerId)
+        Customer customer = customerRepository.findById(canonical(customerId))
                 .orElseThrow(() -> new CustomerNotFoundException("Customer not found: " + customerId));
         customer.setStatus(CustomerStatus.CLOSED);
         customerRepository.save(customer);
+        log.info("Closed customer {}", customerId);
     }
 }

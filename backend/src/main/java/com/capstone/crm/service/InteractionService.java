@@ -32,14 +32,19 @@ public class InteractionService {
 
     @Transactional
     public InteractionEvent createAndPublish(CreateInteractionRequest request, String correlationId) {
-        // Ensures the interaction belongs to a known customer.
-        customerService.get(request.customerId());
+        // Ensures the interaction belongs to a known customer, and yields the
+        // customer's own spelling of its id. Everything below stores that rather
+        // than what the caller typed: a request for "cus-1002" resolves to
+        // CUS-1002, so filing the row under the caller's version would hide it
+        // from the read-back, which queries by exact match. The Kafka key has to
+        // agree for the same reason — one customer, one partition.
+        String customerId = customerService.get(request.customerId()).customerId();
         String interactionId = "INT-" + UUID.randomUUID();
         Instant occurredAt = Instant.now();
 
         interactionRepository.save(new Interaction(
                 interactionId,
-                request.customerId(),
+                customerId,
                 request.channel(),
                 request.notes(),
                 occurredAt
@@ -51,7 +56,7 @@ public class InteractionService {
                 "interaction.created", // event type
                 1, // contract version
                 occurredAt,
-                request.customerId(), // Kafka message key
+                customerId, // Kafka message key
                 interactionId,
                 request.channel(),
                 request.notes()
@@ -62,10 +67,12 @@ public class InteractionService {
 
     @Transactional(readOnly = true)
     public List<InteractionResponseDTO> listForCustomer(String customerId) {
-        // A nested customer resource returns 404 when its parent is unknown.
-        customerService.get(customerId);
+        // A nested customer resource returns 404 when its parent is unknown, and
+        // the lookup below uses the customer's canonical id for the same reason
+        // the write path does.
+        String canonicalId = customerService.get(customerId).customerId();
         return interactionRepository
-                .findByCustomerIdOrderByOccurredAtDescInteractionIdDesc(customerId)
+                .findByCustomerIdOrderByOccurredAtDescInteractionIdDesc(canonicalId)
                 .stream()
                 .map(InteractionService::toResponse)
                 .toList();
