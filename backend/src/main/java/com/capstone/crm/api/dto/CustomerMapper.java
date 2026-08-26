@@ -6,9 +6,11 @@ public final class CustomerMapper {
 
     private CustomerMapper() {}
 
+    // customerId is not set here
+    // set after this call from customer_number_seq, never by the caller
+    // still CUS-XXXX
     public static Customer toEntity(CustomerRequestDTO dto) {
         Customer customer = new Customer();
-        customer.setCustomerId(dto.customerId());
         customer.setFullName(dto.fullName());
         customer.setEmail(dto.email());
         customer.setPhone(dto.phone());

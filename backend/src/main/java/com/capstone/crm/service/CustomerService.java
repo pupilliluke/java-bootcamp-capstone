@@ -7,7 +7,6 @@ import com.capstone.crm.api.dto.CustomerUpdateDTO;
 import com.capstone.crm.entity.Customer;
 import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
-import com.capstone.crm.exception.DuplicateCustomerException;
 import com.capstone.crm.repository.CustomerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,11 +32,9 @@ public class CustomerService {
         return customerId == null ? null : customerId.trim().toUpperCase();
     }
 
+    //now has customerId assigned to it. no need for duplicate checks now.
     public CustomerResponseDTO create(CustomerRequestDTO request) {
-        String customerId = canonical(request.customerId());
-        if (customerRepository.existsById(customerId)) {
-            throw new DuplicateCustomerException("Duplicate customer: " + customerId);
-        }
+        String customerId = "CUS-" + customerRepository.nextCustomerNumber();
         Customer customer = CustomerMapper.toEntity(request);
         customer.setCustomerId(customerId);
         customer.setCreatedAt(Instant.now());
