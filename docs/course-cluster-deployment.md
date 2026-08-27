@@ -38,8 +38,10 @@ kubectl -n student02 create secret generic crm-api-secrets `
   --from-literal=LOCAL_DB_PASSWORD='<sheet>' `
   --from-literal=JWT_SECRET='<generated, 32+ chars>'
 
-# 2. The shared manifests
-kubectl -n student02 apply -f k8s/configmap.yaml -f k8s/service.yaml `
+# 2. The shared manifests -- the cluster ConfigMap overlay, not the local one:
+#    k8s/configmap.yaml keeps the k3d/CI values and stays under test on every
+#    pull request; k8s/cluster/configmap.yaml carries the course endpoints.
+kubectl -n student02 apply -f k8s/cluster/configmap.yaml -f k8s/service.yaml `
   -f k8s/deployment.yaml -f k8s/ingress.yaml
 
 # 3. Per-student values

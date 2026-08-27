@@ -1,0 +1,63 @@
+# The ConfigMap for the shared course cluster, as opposed to k8s/configmap.yaml
+# which holds the k3d/CI values.
+#
+# Two files rather than one edited in place, because the local one is under test
+# on every pull request: the cluster job applies it, and a value repointed at
+# 100.22.136.97 would either fail CI or, worse, have CI quietly exercise an
+# endpoint no runner should be reaching.
+#
+# studentNN is left as a literal placeholder, not filled in with a real student
+# number. This repository is shared by a team whose members each own a different
+# namespace and a different schema, so any concrete value here is wrong for
+# everybody but the person who committed it.
+#
+# Fill it in without committing it -- patch after applying:
+#
+#   kubectl -n studentNN patch configmap crm-api-config --type merge -p '{"data":{
+#     "LOCAL_DB_USER":"studentNN",
+#     "LOCAL_DB_URL_OPTIONS":"?currentSchema=studentNN",
+#     "CRM_INTERACTION_TOPIC":"studentNN.crm.interaction.v1",
+#     "CRM_CONSUMER_GROUP":"studentNN.crm-interaction-service-v1"}}'
+#
+# Nothing here is secret. The password lives in the Secret, created out of band:
+#
+#   kubectl -n studentNN create secret generic crm-api-secrets \
+#     --from-literal=LOCAL_DB_PASSWORD='...' \
+#     --from-literal=JWT_SECRET='...'
+#
+# Apply with an explicit namespace, same as every other manifest:
+#
+#   kubectl -n studentNN apply -f k8s/cluster/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-api-config
+  labels:
+    app: crm-api
+data:
+  SPRING_PROFILES_ACTIVE: "local"
+  SERVER_PORT: "8080"
+
+  # The cohort host. swe1 is 100.23.237.198; this is swe2. There is no
+  # host.k3d.internal here -- that name is a k3d invention resolving to a laptop.
+  LOCAL_DB_HOST: "100.22.136.97"
+  LOCAL_DB_PORT: "5432"
+
+  # One database for the whole cohort, one schema per student, so the schema is
+  # the only thing separating your tables from everyone else's. Being explicit
+  # here is what makes Flyway create them in the right place rather than
+  # wherever the role's search_path happens to point.
+  LOCAL_DB_NAME: "bootcamp"
+  LOCAL_DB_USER: "studentNN"
+  LOCAL_DB_URL_OPTIONS: "?currentSchema=studentNN"
+
+  # One broker for the cohort with no per-user topic isolation, so both names
+  # are prefixed. Unprefixed, every team publishes into crm.interaction.v1 and
+  # joins crm-interaction-service-v1 together, reads each other's interactions,
+  # and sees only a share of its own -- with nothing raising an error.
+  #
+  # The dead letter topic needs no entry: KafkaConfig derives it from the
+  # record's own topic, so a prefixed topic already yields a prefixed .DLT.
+  KAFKA_BOOTSTRAP_SERVERS: "100.22.136.97:9092"
+  CRM_INTERACTION_TOPIC: "studentNN.crm.interaction.v1"
+  CRM_CONSUMER_GROUP: "studentNN.crm-interaction-service-v1"

@@ -154,3 +154,10 @@ crm:
       secret: ${JWT_SECRET}
       issuer: capstone-crm
       expiration-minutes: 60
+    google:
+      # The OAuth 2.0 Web-application client id. Unlike the JWT secret this is
+      # not a secret — it ships in the frontend bundle — so a public default is
+      # committed here to let Google Sign-In work out of the box, and GOOGLE_CLIENT_ID
+      # overrides it per environment. It is the audience every ID token is checked
+      # against, so a wrong value rejects every Google login rather than opening one.
+      client-id: ${GOOGLE_CLIENT_ID:398192114075-fb8j3jdt7m2qrqpe6957g5o57ajppfhn.apps.googleusercontent.com}

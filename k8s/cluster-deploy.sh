@@ -59,8 +59,12 @@ else
     --from-literal=JWT_SECRET="$JWT_SECRET"
 fi
 
+# k8s/cluster/configmap.yaml, not k8s/configmap.yaml: the local file keeps the
+# k3d/CI values and stays under test on every pull request, while the cluster
+# overlay carries the course endpoints with studentNN placeholders -- which the
+# patch below fills in. Same name, so whichever applied last wins.
 kubectl -n "$STUDENT_NS" apply \
-  -f k8s/configmap.yaml \
+  -f k8s/cluster/configmap.yaml \
   -f k8s/service.yaml \
   -f k8s/deployment.yaml \
   -f k8s/ingress.yaml

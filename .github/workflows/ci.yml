@@ -201,12 +201,24 @@ jobs:
           ./container-structure-test test \
             --image crm-api:test --config backend/container-structure-test.yaml
 
-      # exit-code 1, so this gates rather than reports. It landed green on
-      # purpose: a gate that is red on the day it arrives is a gate the team
-      # learns to ignore, so the findings were dealt with first -- the
-      # spring-boot-parent bump to 3.5.16 cleared the dependency CVEs, and what
-      # remains is accepted by id in .trivyignore.yaml with an owner and an
-      # expiry.
+      # REPORT-ONLY FOR NOW (exit-code 0). Read this before changing it.
+      #
+      # The image currently carries 8 critical and 41 high findings, nearly all
+      # of them from the application's own dependencies rather than the base
+      # image: tomcat-embed-core 10.1.31 alone accounts for 5 critical and 14
+      # high, and spring-security-web 6.3.4 for another critical. They have
+      # fixes available, so ignore-unfixed does not filter them out.
+      #
+      # Set exit-code to 1 and this job fails on every pull request from the
+      # moment it merges, for everyone, over problems no individual pull request
+      # introduced. A gate that is red on the day it lands is a gate the team
+      # learns to ignore, so it starts as a report and becomes a gate once the
+      # findings are dealt with.
+      #
+      # The fix is one line: the spring-boot-starter-parent version in
+      # backend/pom.xml is 3.3.5, from October 2024. Bumping it pulls patched
+      # Tomcat and Spring Security in transitively. Do that first, confirm this
+      # step reports clean, then change exit-code to "1" and delete this comment.
       #
       # Locally, `docker scout quickview crm-api:test` answers the same question
       # in seconds and needs no database download, which on a home connection is
@@ -214,8 +226,9 @@ jobs:
       # here because the action caches its database between runs and because it
       # also sweeps for committed secrets.
       #
-      # It replaces the Dependency-Check step that used to sit in the backend
-      # job, and it is a straight upgrade rather than a retreat: the image carries the Spring Boot
+      # exit-code 1, so this gates rather than reports. It replaces the
+      # Dependency-Check step that used to sit in the backend job, and it is a
+      # straight upgrade rather than a retreat: the image carries the Spring Boot
       # fat jar, so BOOT-INF/lib is scanned here and every dependency that
       # actually ships is covered. Trivy matches on package coordinates instead
       # of CPE strings, which is why it does not reproduce the three CPE
@@ -453,12 +466,41 @@ jobs:
       # not visible to it. Without this the pod sits in ErrImagePull.
       - name: Load the image into the cluster
         run: |
-          k3d image import crm-api:dev -c ci
-          # Verified rather than assumed. k3d image import can exit 0 having
-          # imported nothing -- observed locally, where the pod then spent ten
-          # minutes in ContainerCreating pulling from Docker Hub instead. grep
-          # fails the step if the image is not actually in the cluster.
-          docker exec k3d-ci-server-0 crictl images | grep crm-api
+          # pipefail so a failing `docker exec` is not masked by grep's exit
+          # code, for the same reason the manifests job sets it.
+          set -o pipefail
+
+          # Verified rather than assumed, and retried rather than trusted. k3d
+          # image import can exit 0 having imported nothing -- first observed
+          # locally, where the pod then spent ten minutes in ContainerCreating
+          # pulling from Docker Hub instead, and since seen on CI run
+          # 32982229604: k3d logged "Importing images from tarball" and
+          # "Removing the tarball(s)" 3ms apart, then reported success. The
+          # equivalent import on a healthy run takes about seven seconds.
+          #
+          # The check is therefore the image store, never the exit code. Three
+          # attempts because the failure is intermittent -- the same commit and
+          # the same workflow had passed eleven hours earlier.
+          for attempt in 1 2 3; do
+            # `|| echo` rather than a bare call: the step runs under `bash -e`,
+            # so a non-zero k3d would abort here and skip the retry entirely.
+            # The exit code is not the signal anyway -- the image store is.
+            k3d image import crm-api:dev -c ci \
+              || echo "k3d exited non-zero on attempt ${attempt}" >&2
+            if docker exec k3d-ci-server-0 crictl images | grep crm-api; then
+              echo "crm-api is in the node image store (attempt ${attempt})"
+              exit 0
+            fi
+            echo "attempt ${attempt} imported nothing, retrying" >&2
+            sleep 5
+          done
+
+          # Dump what the node actually holds. Without this a failure here says
+          # only that grep found nothing, which is the least useful half of the
+          # answer.
+          echo "crm-api never reached the node image store after 3 attempts" >&2
+          docker exec k3d-ci-server-0 crictl images >&2
+          exit 1
 
       # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on
       # Windows, where git does not reliably carry the executable bit, and a
@@ -618,9 +660,7 @@ jobs:
             backend/target/SHA256SUMS
 
   # Pushes the image to GHCR -- the course's named registry -- so the Deployment
-  # can pin a digest instead of a mutable tag. That follow-up from ADR-005 has
-  # since landed: k8s/deployment.yaml pins the digest this job printed for the
-  # build it runs (see the ADR's amendment and docs/rollback-runbook.md).
+  # can pin a digest instead of a mutable tag (ADR-005's open follow-up).
   #
   # Only on push to develop/main, like package: a pull request's image is a
   # candidate, and candidates do not get published. Two tags per build: the

@@ -18,6 +18,13 @@
     <dependency-check.version>10.0.4</dependency-check.version>
     <tomcat.version>10.1.59</tomcat.version>
 
+    <!-- Overriding Spring Boot's managed 42.7.11, which carries CVE-2026-54291:
+         pgjdbc accepts a downgrade from SCRAM-SHA-256-PLUS, losing the channel
+         binding that stops a man in the middle from relaying the handshake. We
+         talk to PostgreSQL over the network in every environment, so this one is
+         on our path. Fixed in 42.7.12; 42.7.13 is the current patch. -->
+    <postgresql.version>42.7.13</postgresql.version>
+
     <!-- ContainerImageIT tests a built Docker image, so it needs one to exist.
          The ordinary build has no reason to have built it, and a test that
          cannot run must not be the thing that reddens `mvn verify` on a laptop
@@ -89,6 +96,17 @@
       <artifactId>jjwt-jackson</artifactId>
       <version>0.11.5</version>
       <scope>runtime</scope>
+    </dependency>
+
+    <!-- Verifies Google Sign-In ID tokens: checks the RS256 signature against
+         Google's rotating public keys, the issuer, exp, and that the audience is
+         our OAuth client id. Carries GoogleIdTokenVerifier plus the HTTP
+         transport and Gson JSON factory it needs. Version pinned; Spring Boot's
+         BOM does not manage these coordinates. -->
+    <dependency>
+      <groupId>com.google.api-client</groupId>
+      <artifactId>google-api-client</artifactId>
+      <version>2.7.0</version>
     </dependency>
 
     <dependency>
@@ -197,6 +215,22 @@
     </profile>
     <profile>
       <id>security-scan</id>
+      <!--
+        Opt-in, and no longer wired into CI. Trivy gates the image job instead:
+        it reads the fat jar's BOOT-INF/lib, matches on package coordinates
+        rather than CPE strings, and needs no NVD API key - which matters,
+        because none was obtainable and the unauthenticated download ran to an
+        hour and a half.
+
+        Kept because a second opinion from a different matching strategy is
+        worth having, and because this is where the triage in
+        dependency-check-suppressions.xml and docs/risk-register.md was done.
+        Run it by hand when a dependency changes shape:
+
+            ./mvnw -Psecurity-scan dependency-check:check
+
+        Expect the first run to spend a long time building the NVD database.
+      -->
       <build>
         <plugins>
           <plugin>
