@@ -210,17 +210,29 @@ Backend on the shared k3s cluster (one namespace per student), UI on your
 laptop proxying to it. Full record, evidence, and demo pre-flight:
 `docs/course-cluster-deployment.md`.
 
-### Deploy
+### Per-student setup and deploy
 
-1. `copy k8s\cluster.env.example .env.cluster` (works in cmd and PowerShell)
-2. Fill `.env.cluster` from your row of the credentials sheet
-3. `bash k8s/cluster-deploy.sh` — **in Git Bash**
+Everything personal lives in gitignored files; each student does this once
+with their own row of the credentials sheet. `studentNN` is your number — it
+names your namespace, DB user, and schema, all three.
+
+1. Save your kubeconfig from the instructor's share to `C:\Users\<you>\.kube\studentNN.yaml` (a path with no spaces)
+2. Verify it is the current cluster's — in Git Bash: `grep certificate-authority-data ~/.kube/studentNN.yaml | sed 's/.*: *//' | base64 -d | openssl x509 -noout -subject` must print `k3s-server-ca@1784642847`
+3. `copy k8s\cluster.env.example .env.cluster` (works in cmd and PowerShell)
+4. Edit `.env.cluster`: your `STUDENT_NS`, your sheet DB password, `KUBECONFIG_PATH` **with forward slashes** (`C:/Users/...`), `INGRESS_HOST=crm-studentNN.100.22.136.97.nip.io`
+5. Generate your `JWT_SECRET` into it — in Git Bash: `openssl rand -base64 36`
+6. Set `IMAGE` to the digest in the known-good table of `docs/rollback-runbook.md` (or the latest `publish` run summary)
+7. `bash k8s/cluster-deploy.sh` — **in Git Bash**
+8. `kubectl --kubeconfig C:\Users\<you>\.kube\studentNN.yaml -n studentNN get pods` → expect `1/1 Running`
+9. Open `http://crm-studentNN.100.22.136.97.nip.io/actuator/health/readiness` in a browser → expect `{"status":"UP"}`
 
 Safe to re-run: the Secret is created only if absent, everything else is
-apply/patch. Step 3 really does need Git Bash — in cmd and PowerShell, plain
+apply/patch. Step 7 really does need Git Bash — in cmd and PowerShell, plain
 `bash` is WSL's, which cannot read Windows paths; from those shells run
 `"C:\Program Files\Git\bin\bash.exe" k8s/cluster-deploy.sh` instead (the
-script detects WSL and says so rather than failing confusingly).
+script detects WSL and says so rather than failing confusingly). Never
+commit `.env.cluster`, `frontend/.env.local`, or a kubeconfig — all are
+gitignored; keep them that way.
 
 ### View it
 
