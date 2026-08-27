@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -204,6 +205,92 @@ class CustomerControllerTest {
         assertThat(second).matches("CUS-\\d+");
         assertThat(Long.parseLong(second.substring(4)))
                 .isGreaterThan(Long.parseLong(first.substring(4)));
+    }
+
+    // --- filtering the list by status ------------------------------------------
+    //
+    // Containment rather than exact lists, for the reason the block above
+    // gives: one H2 database is shared by every test class in the JVM, so the
+    // customer table holds the demo seed plus whatever the other tests have
+    // created. What is provable is where the rows *this* test made show up, and
+    // that no CLOSED customer from any source appears where none should.
+
+    @Test
+    void listExcludesClosedCustomersByDefault() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        String open = createCustomer(agent);
+        String closed = closedCustomer(agent);
+
+        String body = listWith(agent, "");
+
+        assertThat(statusesIn(body)).doesNotContain("CLOSED");
+        assertThat(idsIn(body)).contains(open).doesNotContain(closed);
+    }
+
+    @Test
+    void askingForClosedReturnsOnlyClosedCustomers() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        String open = createCustomer(agent);
+        String closed = closedCustomer(agent);
+
+        String body = listWith(agent, "?status=CLOSED");
+
+        assertThat(statusesIn(body)).containsOnly("CLOSED");
+        assertThat(idsIn(body)).contains(closed).doesNotContain(open);
+    }
+
+    // The headline case from the issue: repeating the parameter asks for both
+    // groups and gets exactly those two.
+    @Test
+    void repeatingTheStatusParameterReturnsBothGroups() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        String active = createCustomer(agent);
+        String closed = closedCustomer(agent);
+
+        String body = listWith(agent, "?status=ACTIVE&status=CLOSED");
+
+        assertThat(statusesIn(body)).containsOnly("ACTIVE", "CLOSED");
+        assertThat(idsIn(body)).contains(active, closed);
+    }
+
+    // 400 rather than 500. Nothing in CustomerController produces this: Spring
+    // cannot convert "VIP" to a CustomerStatus and raises
+    // MethodArgumentTypeMismatchException, which GlobalExceptionHandler maps to
+    // Bad Request. The endpoint depends on that mapping without stating it, so
+    // this is here to fail if the handler is ever removed.
+    @Test
+    void anUnknownStatusValueIsBadRequest() throws Exception {
+        mockMvc.perform(get("/api/customers?status=VIP")
+                        .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
+                .andExpect(status().isBadRequest());
+    }
+
+    private String listWith(String token, String query) throws Exception {
+        return mockMvc.perform(get("/api/customers" + query)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    private static List<String> idsIn(String body) {
+        return JsonPath.read(body, "$[*].customerId");
+    }
+
+    private static List<String> statusesIn(String body) {
+        return JsonPath.read(body, "$[*].status");
+    }
+
+    // Created and then closed through update(), because that is how a customer
+    // becomes CLOSED in this application — see the block above. The update body
+    // carries a fresh email for the same reason createCustomer does.
+    private String closedCustomer(String token) throws Exception {
+        String customerId = createCustomer(token);
+        mockMvc.perform(put("/api/customers/" + customerId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus("Closed Customer", randomEmail(), "CLOSED")))
+                .andExpect(status().isOk());
+        return customerId;
     }
 
     // Emails are randomised rather than shared, because V3__customer.sql

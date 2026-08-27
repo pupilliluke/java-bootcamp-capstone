@@ -1,0 +1,120 @@
+Index evidence: ix_customer_status (V6__customer_status_index.sql)
+Issue:    #48 - Filter customers by status: API and query
+Branch:   Filter-customers-by-stauts, from d0257f5
+Date:     2026-08-26
+Database: PostgreSQL 17.11 (docker-compose postgres:17)
+Lab:      38 - indexes chosen from evidence rather than from instinct
+
+
+WHAT WAS MEASURED
+
+GET /api/customers reaches the database as one query, through
+CustomerRepository.findByStatusIn:
+
+    SELECT customer_id, created_at, email, full_name, phone, status
+    FROM customer WHERE status IN (?)
+
+It arrives in two shapes, and they are worth measuring separately because they
+ask for very different fractions of the table:
+
+    default        status IN (ACTIVE, SUSPENDED, PROSPECT)   90% of rows
+    ?status=CLOSED status IN (CLOSED)                        10% of rows
+
+Run against a throwaway database rather than the dev `crm` one, holding 50,000
+customers at the status mix DemoCustomerSeeder produces. The dev database has
+four rows in it; PostgreSQL sequential scans a table that size whatever indexes
+exist, so a before/after taken there would have compared nothing. The script
+that produced everything below is at the end of this file.
+
+    ACTIVE     30000   60.0%
+    PROSPECT   10000   20.0%
+    CLOSED      5000   10.0%
+    SUSPENDED   5000   10.0%
+
+
+BEFORE - no index on customer(status)
+
+  default list: status IN (ACTIVE, SUSPENDED, PROSPECT)
+
+     Seq Scan on customer (actual rows=45000 loops=1)
+       Filter: ((status)::text = ANY ('{ACTIVE,SUSPENDED,PROSPECT}'::text[]))
+       Rows Removed by Filter: 5000
+       Buffers: shared hit=610
+     Planning Time: 0.546 ms
+     Execution Time: 6.507 ms
+
+  ?status=CLOSED: status IN (CLOSED)
+
+     Seq Scan on customer (actual rows=5000 loops=1)
+       Filter: ((status)::text = 'CLOSED'::text)
+       Rows Removed by Filter: 45000
+       Buffers: shared hit=610
+     Planning Time: 0.048 ms
+     Execution Time: 3.477 ms
+
+
+AFTER - CREATE INDEX ix_customer_status ON customer (status)
+
+  default list: status IN (ACTIVE, SUSPENDED, PROSPECT)
+
+     Seq Scan on customer (actual rows=45000 loops=1)
+       Filter: ((status)::text = ANY ('{ACTIVE,SUSPENDED,PROSPECT}'::text[]))
+       Rows Removed by Filter: 5000
+       Buffers: shared hit=610
+     Planning Time: 0.180 ms
+     Execution Time: 6.966 ms
+
+  ?status=CLOSED: status IN (CLOSED)
+
+     Bitmap Heap Scan on customer (actual rows=5000 loops=1)
+       Recheck Cond: ((status)::text = 'CLOSED'::text)
+       Heap Blocks: exact=610
+       Buffers: shared hit=610 read=6
+       ->  Bitmap Index Scan on ix_customer_status (actual rows=5000 loops=1)
+             Index Cond: ((status)::text = 'CLOSED'::text)
+             Buffers: shared read=6
+     Planning Time: 0.065 ms
+     Execution Time: 1.557 ms
+
+  Cost of carrying it:  table 4880 kB, index 360 kB (7.4%)
+
+
+WHAT THE NUMBERS SAY
+
+The index helps one of the two queries and is correctly ignored by the other.
+
+  ?status=CLOSED   3.477 ms -> 1.557 ms, a 2.2x improvement, and the plan
+                   changes: 610 heap buffers scanned and 45,000 rows thrown
+                   away becomes a 6-buffer index scan that visits only matching
+                   rows. This is the query the index exists for.
+
+  default list     6.507 ms -> 6.966 ms, and the plan does not change at all.
+                   PostgreSQL still sequential scans, which is the right call:
+                   the query wants 90% of the table, and reading 610 blocks in
+                   order beats reading an index and then visiting nearly every
+                   block anyway. The difference between the two runs is noise
+                   on a 50,000-row table, not a regression - same plan, same
+                   610 buffers.
+
+That asymmetry is the argument for the plain B-tree that shipped rather than the
+partial index on CLOSED the access pattern alone would suggest. The partial
+index would serve the same one query and cost less to maintain, but H2 does not
+support partial indexes, and V3__customer.sql commits to running the same file
+on PostgreSQL in operation and on H2 under test. Optimising a query the planner
+already refuses to use an index for, at the price of breaking the test suite, is
+the wrong trade.
+
+Honest limit on all of this: 50,000 rows is a number chosen to make the planner
+behave like it would in production, not a number this application has. At the
+four rows in the dev database, and at the 1,002 a local run now seeds, both
+queries sequential scan and the index earns nothing. It is here for the size the
+table grows to, and the measurement above is what says where the crossover is.
+
+
+REPRODUCING
+
+  docker compose exec -T postgres psql -U crm -d postgres -c "CREATE DATABASE crm_explain;"
+  docker compose exec -T postgres psql -U crm -d crm_explain -q -f - < docs/customer-status-index-evidence.sql
+  docker compose exec -T postgres psql -U crm -d postgres -c "DROP DATABASE crm_explain;"
+
+The SQL is kept alongside this file as customer-status-index-evidence.sql.

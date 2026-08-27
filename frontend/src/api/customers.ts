@@ -1,10 +1,16 @@
-import type { CreateCustomer, Customer, CustomerUpdate } from '../types/customer'
+import type { CreateCustomer, Customer, CustomerStatus, CustomerUpdate } from '../types/customer'
 import { http } from './http'
 
 // Matches the Lab 49 backend contract (CustomerController).
 export const customersApi = {
-  list(signal?: AbortSignal): Promise<Customer[]> {
-    return http<Customer[]>('/api/customers', {}, signal)
+  // `status` is repeatable server-side: ?status=ACTIVE&status=PROSPECT asks for
+  // both. Passing nothing takes the server's default, which is every status
+  // except CLOSED — so a caller that needs closed customers has to name them.
+  list(statuses?: CustomerStatus[], signal?: AbortSignal): Promise<Customer[]> {
+    const query = statuses?.length
+      ? `?${statuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}`
+      : ''
+    return http<Customer[]>(`/api/customers${query}`, {}, signal)
   },
   get(customerId: string, signal?: AbortSignal): Promise<Customer> {
     return http<Customer>(`/api/customers/${encodeURIComponent(customerId)}`, {}, signal)
