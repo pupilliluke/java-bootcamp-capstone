@@ -51,7 +51,7 @@ class InteractionControllerTest {
                         .header("X-Correlation-Id", "journey-test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CREATE_BODY))
-                .andExpect(status().isAccepted())
+                .andExpect(status().isCreated())
                 .andExpect(header().string("X-Correlation-Id", "journey-test"))
                 .andExpect(jsonPath("$.interactionId").isNotEmpty())
                 .andExpect(jsonPath("$.customerId").value("CUS-1001"))
