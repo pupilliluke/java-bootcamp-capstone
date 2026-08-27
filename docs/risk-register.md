@@ -6,7 +6,7 @@ above needs a mitigation with a date, not just a contingency.
 Owners below are drawn from who currently owns the code, not from an agreement —
 confirm them at standup and correct anything wrong.
 
-Last reviewed: 2026-08-26
+Last reviewed: 2026-08-27
 
 ## Delivery risks
 
@@ -55,6 +55,7 @@ is explicitly accepted with owner and date*.
 | A1 | The Azure database accepts connections from any IP address. Firewall rule `AllowAll_2026-8-23_18-25-10` spans `0.0.0.0`–`255.255.255.255`. | Accepted for the training period | Four developers on rotating home IP addresses would need constant rule changes. The server holds only synthetic data, TLS 1.2 is enforced, and the admin password is 128 characters, so brute force is not realistic. Residual exposure is credential leakage, connection flooding, and future gateway CVEs. | Luke Pupilli | 2026-08-23 |
 | A2 | `CVE-2025-7962` (7.5) against `angus-activation-2.0.3.jar`. SMTP injection via CR/LF in Jakarta Mail. | Suppressed as not applicable, expires 2026-11-26 | Two independent reasons. Wrong package: the advisory is against Jakarta Mail (`angus-mail`); this is `angus-activation`, a different artifact matched on the shared `angus` CPE. Wrong application: this service sends no mail — there is no `spring-boot-starter-mail` and no `jakarta.mail` on the classpath, so there is no SMTP path to inject into. `angus-activation` arrives as a runtime transitive of `jaxb-core`, for XML binding. | Luke Pupilli | 2026-08-26 |
 | A3 | `CVE-2026-34478`, `CVE-2026-34479`, `CVE-2026-34480`, `CVE-2026-34481` (7.5 each) against `log4j-api-2.24.3.jar`. | Suppressed as not applicable, expires 2026-11-26 | All four are defects in Log4j **Core** layouts — `Rfc5424Layout`, `Log4j1XmlLayout`, `XmlLayout`, `JsonTemplateLayout` by name. Those classes ship in `log4j-core`, which is not on the classpath. Only `log4j-api` is present, pulled in under `log4j-to-slf4j`, a bridge that routes Log4j API calls into SLF4J and therefore Logback. No Log4j layout is ever instantiated because no Log4j implementation exists to instantiate one. Re-triage immediately if `log4j-core` ever appears. | Luke Pupilli | 2026-08-26 |
+| A4 | The **Contacts** and **Reports** pages render hardcoded mock data (`MOCK_CONTACTS`, `MOCK_REPORTS`) with no backend behind them — there is no contacts entity or reports source to read. (The Activities page was rewired to live data in #111 and is not affected; seeding, #106, does not touch Contacts/Reports.) | Mitigated — the two sidebar links are removed (#102), so neither page is reachable during the demo | Building real Contacts/Reports is out of scope for the week, so rather than show a panel labeled-but-fabricated data, the links are dropped from the nav; the pages and routes still exist behind them and can be relinked when they have a real data source. The live paths — the Activities feed and the customer Activities tab — use real interactions. Tracked in issue #102. | Luke Pupilli | 2026-08-27 |
 
 Review A1 before the Lab 52 defense: if the database holds anything beyond
 synthetic fixtures by then, narrow the rule instead.
