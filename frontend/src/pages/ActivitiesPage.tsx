@@ -8,7 +8,7 @@ import type { Navigate } from '../nav'
 //
 // This used to render a fixed array of invented rows because nothing could list
 // interactions across customers. It still cannot: there is no
-// GET /api/interactions, so useRecentInteractions fans out per customer and the
+// GET /api/v1/interactions, so useRecentInteractions fans out per customer and the
 // cap inside it bounds how much of the book this covers. That is a real limit
 // and it is stated on the page rather than hidden, but the rows are now real.
 const FEED_LIMIT = 40

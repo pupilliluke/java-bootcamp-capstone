@@ -29,7 +29,7 @@ public class CustomerService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
-    // What GET /api/customers answers with when the caller names no status.
+    // What GET /api/v1/customers answers with when the caller names no status.
     //
     // complementOf rather than an explicit EnumSet.of(ACTIVE, SUSPENDED,
     // PROSPECT): a status added to CustomerStatus later then joins the default

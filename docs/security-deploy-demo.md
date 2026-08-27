@@ -102,12 +102,12 @@ Image back to `crm-api:dev`, readiness 200, anonymous read still 401.
 curl -s -o /dev/null -w "%{http_code}\n" -H "Host: crm-api.localtest.me" \
   http://localhost:8088/actuator/health/readiness
 
-curl -s -X POST http://localhost:8088/api/auth/login \
+curl -s -X POST http://localhost:8088/api/v1/auth/login \
   -H "Host: crm-api.localtest.me" -H "Content-Type: application/json" \
   -d '{"username":"admin1","password":"admin1"}'
 
 curl -s -o /dev/null -w "%{http_code}\n" -H "Host: crm-api.localtest.me" \
-  -H "Authorization: Bearer <token>" http://localhost:8088/api/customers
+  -H "Authorization: Bearer <token>" http://localhost:8088/api/v1/customers
 ```
 
 Expect 200, 200 with a token, 200. Without the token, 401. Use `admin1`;

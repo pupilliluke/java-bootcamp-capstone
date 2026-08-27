@@ -338,7 +338,7 @@ class ContainerImageIT {
     @Test
     @DisplayName("rejects an unauthenticated request to the API")
     void apiRequiresAuthentication() throws Exception {
-        assertThat(get("/api/customers").statusCode()).isEqualTo(401);
+        assertThat(get("/api/v1/customers").statusCode()).isEqualTo(401);
     }
 
     @Test
@@ -353,7 +353,7 @@ class ContainerImageIT {
                 + ".Ky0dGCEDDfXhH4gW4nBIWKZ8YQxHhVMDPu5aM7XKn9I";
 
         HttpResponse<String> response = HTTP.send(
-                HttpRequest.newBuilder(URI.create(baseUrl + "/api/customers"))
+                HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/customers"))
                         .header("Authorization", "Bearer " + forged)
                         .timeout(Duration.ofSeconds(15))
                         .GET().build(),
@@ -368,7 +368,7 @@ class ContainerImageIT {
         String token = login();
 
         HttpResponse<String> customers = HTTP.send(
-                HttpRequest.newBuilder(URI.create(baseUrl + "/api/customers"))
+                HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/customers"))
                         .header("Authorization", "Bearer " + token)
                         .timeout(Duration.ofSeconds(15))
                         .GET().build(),
@@ -384,7 +384,7 @@ class ContainerImageIT {
         // level too; asserting it here is the difference between "the rule is
         // written" and "the rule is in the jar that was actually built".
         HttpResponse<String> response = HTTP.send(
-                HttpRequest.newBuilder(URI.create(baseUrl + "/api/customers/1"))
+                HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/customers/1"))
                         .header("Authorization", "Bearer " + login())
                         .timeout(Duration.ofSeconds(15))
                         .DELETE().build(),
@@ -496,7 +496,7 @@ class ContainerImageIT {
 
     private static String login() throws Exception {
         HttpResponse<String> response = HTTP.send(
-                HttpRequest.newBuilder(URI.create(baseUrl + "/api/auth/login"))
+                HttpRequest.newBuilder(URI.create(baseUrl + "/api/v1/auth/login"))
                         .header("Content-Type", "application/json")
                         .timeout(Duration.ofSeconds(15))
                         .POST(HttpRequest.BodyPublishers.ofString(

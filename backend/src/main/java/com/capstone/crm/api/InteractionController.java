@@ -15,7 +15,7 @@ import org.springframework.http.HttpStatus;
 
 
 @RestController
-@RequestMapping("/api/interactions")
+@RequestMapping("/api/v1/interactions")
 public class InteractionController {
 
     private final InteractionService interactionService;

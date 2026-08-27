@@ -48,23 +48,23 @@ class AdminUserControllerTest {
 
     @Test
     void anonymousCannotAccessAnyAdminUserEndpoint() throws Exception {
-        mockMvc.perform(get("/api/admin/users"))
+        mockMvc.perform(get("/api/v1/admin/users"))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(get("/api/admin/users/{userId}", 1L))
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", 1L))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_CREATE_REQUEST))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(put("/api/admin/users/{userId}", 1L)
+        mockMvc.perform(put("/api/v1/admin/users/{userId}", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_UPDATE_REQUEST))
                 .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(delete("/api/admin/users/{userId}", 1L))
+        mockMvc.perform(delete("/api/v1/admin/users/{userId}", 1L))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -72,27 +72,27 @@ class AdminUserControllerTest {
     void agentCannotAccessAnyAdminUserEndpoint() throws Exception {
         String agentToken = login("agent1", "agent1", "AGENT");
 
-        mockMvc.perform(get("/api/admin/users")
+        mockMvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/admin/users/{userId}", 1L)
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", 1L)
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + agentToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_CREATE_REQUEST))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(put("/api/admin/users/{userId}", 1L)
+        mockMvc.perform(put("/api/v1/admin/users/{userId}", 1L)
                         .header("Authorization", "Bearer " + agentToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(VALID_UPDATE_REQUEST))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(delete("/api/admin/users/{userId}", 1L)
+        mockMvc.perform(delete("/api/v1/admin/users/{userId}", 1L)
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
     }
@@ -101,7 +101,7 @@ class AdminUserControllerTest {
     void adminCanListUsers() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(get("/api/admin/users")
+        mockMvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.username == 'admin1')]").exists())
@@ -112,7 +112,7 @@ class AdminUserControllerTest {
     void adminCanCreateUserAndPasswordIsStoredOnlyAsAHash() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -140,7 +140,7 @@ class AdminUserControllerTest {
     void invalidCreateRequestReturnsBadRequestWithoutSaving() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -162,7 +162,7 @@ class AdminUserControllerTest {
     void malformedRoleReturnsBadRequest() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -182,7 +182,7 @@ class AdminUserControllerTest {
     void duplicateUserReturnsConflict() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(post("/api/admin/users")
+        mockMvc.perform(post("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -202,7 +202,7 @@ class AdminUserControllerTest {
     void missingUserReturnsNotFound() throws Exception {
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(get("/api/admin/users/{userId}", 999_999)
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", 999_999)
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
@@ -214,12 +214,12 @@ class AdminUserControllerTest {
         AppUser target = saveUser("controller-update", "before@example.test", UserRole.AGENT);
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(get("/api/admin/users/{userId}", target.getId())
+        mockMvc.perform(get("/api/v1/admin/users/{userId}", target.getId())
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.username").value("controller-update"));
 
-        mockMvc.perform(put("/api/admin/users/{userId}", target.getId())
+        mockMvc.perform(put("/api/v1/admin/users/{userId}", target.getId())
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -248,7 +248,7 @@ class AdminUserControllerTest {
                 UserRole.AGENT);
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(put("/api/admin/users/{userId}", agent.getId())
+        mockMvc.perform(put("/api/v1/admin/users/{userId}", agent.getId())
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -273,7 +273,7 @@ class AdminUserControllerTest {
         AppUser target = saveUser("controller-delete", "controller-delete@example.test", UserRole.AGENT);
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(delete("/api/admin/users/{userId}", target.getId())
+        mockMvc.perform(delete("/api/v1/admin/users/{userId}", target.getId())
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isNoContent());
 
@@ -285,7 +285,7 @@ class AdminUserControllerTest {
         AppUser admin = users.findByUsername("admin1").orElseThrow();
         String adminToken = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(put("/api/admin/users/{userId}", admin.getId())
+        mockMvc.perform(put("/api/v1/admin/users/{userId}", admin.getId())
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -299,7 +299,7 @@ class AdminUserControllerTest {
                 .andExpect(jsonPath("$.message").value(
                         "Administrators cannot update their own account"));
 
-        mockMvc.perform(delete("/api/admin/users/{userId}", admin.getId())
+        mockMvc.perform(delete("/api/v1/admin/users/{userId}", admin.getId())
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(
@@ -315,7 +315,7 @@ class AdminUserControllerTest {
     }
 
     private String login(String username, String password, String expectedRole) throws Exception {
-        String body = mockMvc.perform(post("/api/auth/login")
+        String body = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk())

@@ -14,11 +14,11 @@ export const adminApi = {
   // the Settings "pending accounts" list also needs a GET. Coding the frontend
   // against this contract; the backend owner needs to add the endpoint.
   listPending(signal?: AbortSignal): Promise<PendingUser[]> {
-    return http<PendingUser[]>('/api/admin/users/pending', {}, signal)
+    return http<PendingUser[]>('/api/v1/admin/users/pending', {}, signal)
   },
 
-  // PATCH /api/admin/users/{id}/enable — ADMIN only (403 for AGENT).
+  // PATCH /api/v1/admin/users/{id}/enable — ADMIN only (403 for AGENT).
   enable(id: number, signal?: AbortSignal): Promise<unknown> {
-    return http<unknown>(`/api/admin/users/${id}/enable`, { method: 'PATCH' }, signal)
+    return http<unknown>(`/api/v1/admin/users/${id}/enable`, { method: 'PATCH' }, signal)
   },
 }

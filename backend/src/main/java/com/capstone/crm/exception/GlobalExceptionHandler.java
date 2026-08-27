@@ -84,7 +84,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * A path variable that will not convert - /api/admin/users/abc reaching a
+     * A path variable that will not convert - /api/v1/admin/users/abc reaching a
      * handler that wants a Long. Without this the catch-all below answers 500,
      * which tells an operator "we broke" when the truth is "you asked for
      * something that is not a number".

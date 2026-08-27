@@ -7,10 +7,10 @@ import type { Customer, Interaction } from '../types/customer'
 //
 // This fans out one request per customer, because there is no endpoint that
 // reads interactions across customers: InteractionController exposes only
-// POST /api/interactions, and reads go through
-// GET /api/customers/{id}/interactions. That is fine for a demo book of three
+// POST /api/v1/interactions, and reads go through
+// GET /api/v1/customers/{id}/interactions. That is fine for a demo book of three
 // and wrong for a real one, so the fan-out is capped and the whole hook is a
-// stopgap. When the paged GET /api/interactions lands this collapses to a
+// stopgap. When the paged GET /api/v1/interactions lands this collapses to a
 // single call and the rest of the dashboard does not change.
 //
 // The cap is on customers, not interactions: MAX_CUSTOMERS requests go out, and

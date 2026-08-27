@@ -61,7 +61,7 @@ class AppUserAuthTest {
     void adminAccountIsNotForbiddenFromAdminOnlyPaths() throws Exception {
         String token = login("admin1", "admin1", "ADMIN");
 
-        mockMvc.perform(get("/api/admin/users")
+        mockMvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
@@ -81,7 +81,7 @@ class AppUserAuthTest {
         disabled.setEnabled(false);
         users.saveAndFlush(disabled);
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"disabled-login\",\"password\":\"password123\"}"))
                 .andExpect(status().isUnauthorized());
@@ -95,7 +95,7 @@ class AppUserAuthTest {
         user.setEnabled(false);
         users.saveAndFlush(user);
 
-        mockMvc.perform(get("/api/customers")
+        mockMvc.perform(get("/api/v1/customers")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
@@ -108,7 +108,7 @@ class AppUserAuthTest {
         users.delete(user);
         users.flush();
 
-        mockMvc.perform(get("/api/customers")
+        mockMvc.perform(get("/api/v1/customers")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
@@ -121,11 +121,11 @@ class AppUserAuthTest {
         user.setRole(UserRole.AGENT);
         users.saveAndFlush(user);
 
-        mockMvc.perform(get("/api/admin/users")
+        mockMvc.perform(get("/api/v1/admin/users")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/customers")
+        mockMvc.perform(get("/api/v1/customers")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
     }
@@ -143,7 +143,7 @@ class AppUserAuthTest {
     }
 
     private String login(String username, String password, String expectedRole) throws Exception {
-        String body = mockMvc.perform(post("/api/auth/login")
+        String body = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk())

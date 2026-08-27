@@ -6,7 +6,7 @@ import InteractionTimeline from '../components/InteractionTimeline'
 import { IconUsers } from '../components/icons'
 import type { Navigate } from '../nav'
 
-// Real dashboard: every number here is derived from GET /api/customers.
+// Real dashboard: every number here is derived from GET /api/v1/customers.
 export default function DashboardPage({
   navigate,
   reloadKey,
@@ -33,7 +33,7 @@ export default function DashboardPage({
   // that reads interactions across customers: useRecentInteractions fans out
   // per customer, so it can only cover the ones already loaded. This is recent
   // activity on recently added customers, not on the whole book. A paged
-  // GET /api/interactions collapses it to one call and widens it at once.
+  // GET /api/v1/interactions collapses it to one call and widens it at once.
   const { interactions, loading: activityLoading, error: activityError } =
     useRecentInteractions(recent)
 
