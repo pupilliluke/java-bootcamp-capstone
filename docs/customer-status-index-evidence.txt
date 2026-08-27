@@ -1,4 +1,4 @@
-Index evidence: ix_customer_status (V5__customer_status_index.sql)
+Index evidence: ix_customer_status (V6__customer_status_index.sql)
 Issue:    #48 - Filter customers by status: API and query
 Branch:   Filter-customers-by-stauts, from d0257f5
 Date:     2026-08-26

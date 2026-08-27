@@ -50,7 +50,7 @@ SELECT customer_id, created_at, email, full_name, phone, status
 FROM customer WHERE status IN ('CLOSED');
 
 \echo ''
-\echo '===================== V5__customer_status_index.sql ====================='
+\echo '===================== V6__customer_status_index.sql ====================='
 CREATE INDEX ix_customer_status ON customer (status);
 ANALYZE customer;
 
