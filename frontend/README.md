@@ -68,7 +68,7 @@ src/
 - `GET /api/customers/{customerId}/interactions` → `InteractionResponseDTO[]`
 - `POST /api/customers` ← `CustomerRequestDTO { customerId, fullName, email, phone?, status }`
 - `PUT /api/customers/{customerId}` ← `CustomerUpdateDTO`
-- `POST /api/interactions` ← `CreateInteractionRequest { customerId, channel, notes }` (202, saved then published)
+- `POST /api/interactions` ← `CreateInteractionRequest { customerId, channel, notes }` (201, saved then published)
 
 ## Stack
 

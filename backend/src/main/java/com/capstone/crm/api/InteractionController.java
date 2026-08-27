@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
 
 
 @RestController
@@ -28,6 +29,6 @@ public class InteractionController {
     public ResponseEntity<InteractionResponseDTO> create(@Valid @RequestBody CreateInteractionRequest request) {
         InteractionResponseDTO response =
                 interactionService.createAndPublish(request, MDC.get(CorrelationIdFilter.MDC_KEY));
-        return ResponseEntity.accepted().body(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }
