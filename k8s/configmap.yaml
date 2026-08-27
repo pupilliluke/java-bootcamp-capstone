@@ -1,8 +1,28 @@
+# Values for the shared course k3s cluster (swe2, 100.22.136.97), not for a
+# local k3d cluster. host.k3d.internal was a k3d invention that resolved to
+# the laptop; it does not exist here.
+#
+# Two values are per-student and are left as studentNN deliberately, because
+# each of us owns a different schema and a different namespace. Patch them
+# after applying, or edit a local copy that is never committed:
+#
+#   kubectl -n studentNN patch configmap crm-api-config --type merge \
+#     -p '{"data":{"LOCAL_DB_USER":"studentNN",
+#                  "CRM_INTERACTION_TOPIC":"studentNN.crm.interaction.v1"}}'
+#
+# The topic matters more than it looks. The broker is shared with no
+# per-user topic isolation, so an unprefixed crm.interaction.v1 means every
+# team building this CRM reads each other's events.
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: crm-api-config
-  namespace: crm
+  # No namespace here on purpose. This repository is shared by a team whose
+  # members each own a different namespace on the course cluster, so a
+  # hardcoded one would be wrong for everybody but its author, and a
+  # namespace in the manifest silently overrides `kubectl apply -n`.
+  # Apply with the namespace instead:  kubectl apply -n studentNN -f k8s/
   labels:
     app: crm-api
 data:
@@ -19,10 +39,10 @@ data:
 
   # host.k3d.internal is injected into CoreDNS by k3d and resolves to the host,
   # where docker-compose publishes PostgreSQL on 5432.
-  LOCAL_DB_HOST: "host.k3d.internal"
+  LOCAL_DB_HOST: "100.22.136.97"
   LOCAL_DB_PORT: "5432"
-  LOCAL_DB_NAME: "crm"
-  LOCAL_DB_USER: "crm"
+  LOCAL_DB_NAME: "bootcamp"
+  LOCAL_DB_USER: "studentNN"
 
   # Deliberately pointed at the host, and deliberately expected to fail.
   #
@@ -31,7 +51,7 @@ data:
   # which inside the pod is the pod. Interactions therefore cannot publish from
   # the cluster until the broker advertises an address a pod can reach, or Kafka
   # runs in-cluster. Everything else -- login, customers, health -- works.
-  KAFKA_BOOTSTRAP_SERVERS: "host.k3d.internal:9092"
+  KAFKA_BOOTSTRAP_SERVERS: "100.22.136.97:9092"
 
   # The local names, and both must change on the course cluster.
   #
@@ -47,5 +67,5 @@ data:
   #
   # The dead letter topic needs no entry. KafkaConfig derives it from whatever
   # the record's topic was, so a prefixed topic already gets a prefixed .DLT.
-  CRM_INTERACTION_TOPIC: "crm.interaction.v1"
+  CRM_INTERACTION_TOPIC: "studentNN.crm.interaction.v1"
   CRM_CONSUMER_GROUP: "crm-interaction-service-v1"
