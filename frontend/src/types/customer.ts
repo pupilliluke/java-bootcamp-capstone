@@ -57,10 +57,3 @@ export interface Contact {
   phone: string
 }
 
-export interface Activity {
-  date: string
-  type: string
-  subject: string
-  assignedTo: string
-  status: 'Completed' | 'Pending'
-}

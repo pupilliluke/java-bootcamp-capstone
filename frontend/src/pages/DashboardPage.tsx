@@ -46,7 +46,7 @@ export default function DashboardPage({
             <Tile label="Total Customers" value={customers.length} tone="blue" />
             <Tile label="Active" value={active} tone="green" />
             <Tile label="Prospects" value={prospects} tone="blue" />
-            <Tile label="Logged today" value={loggedToday} tone="amber" />
+            <Tile label="Activities logged today" value={loggedToday} tone="amber" />
           </div>
 
           <div className="card" style={{ marginTop: '1.1rem' }}>

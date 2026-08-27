@@ -5,7 +5,7 @@
 // never mistaken for real, persisted data. Delete this file (and its screens)
 // once real endpoints exist.
 
-import type { Activity, Contact } from '../types/customer'
+import type { Contact } from '../types/customer'
 
 export const MOCK_CONTACTS: Contact[] = [
   { name: 'John Smith', designation: 'Sales Manager', email: 'john.smith@acme.com', phone: '(555) 111-2222' },
@@ -13,13 +13,6 @@ export const MOCK_CONTACTS: Contact[] = [
   { name: 'Robert Brown', designation: 'Support Lead', email: 'robert.b@acme.com', phone: '(555) 333-4444' },
 ]
 
-export const MOCK_ACTIVITIES: Activity[] = [
-  { date: 'May 01, 2024', type: 'Call', subject: 'Quarterly Follow-up', assignedTo: 'Jennifer Lee', status: 'Completed' },
-  { date: 'Apr 28, 2024', type: 'Email', subject: 'Product Information', assignedTo: 'Michael Chen', status: 'Completed' },
-  { date: 'Apr 20, 2024', type: 'Meeting', subject: 'Requirement Discussion', assignedTo: 'Jennifer Lee', status: 'Completed' },
-  { date: 'Apr 10, 2024', type: 'Task', subject: 'Pricing Proposal', assignedTo: 'Michael Chen', status: 'Pending' },
-  { date: 'Apr 05, 2024', type: 'Call', subject: 'Introductory Call', assignedTo: 'Jennifer Lee', status: 'Completed' },
-]
 
 // Report aggregates (screen 6). Derived shapes for the hand-rolled SVG charts.
 export const MOCK_REPORTS = {
