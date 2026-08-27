@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useCustomers } from '../hooks/useCustomers'
 import type { Navigate } from '../nav'
-import type { CustomerStatus } from '../types/customer'
+import { ALL_CUSTOMER_STATUSES, type CustomerStatus } from '../types/customer'
 import StatusBadge from '../components/StatusBadge'
 import Pagination from '../components/Pagination'
 import { IconEdit, IconEye, IconSearch, IconUserPlus } from '../components/icons'
@@ -19,8 +19,10 @@ export default function CustomerListPage({
   navigate: Navigate
   reloadKey: number
 }) {
-  const { customers, loading, error } = useCustomers(reloadKey)
   const [query, setQuery] = useState('')
+  // Debounced, because the search box now reaches the database. Firing on every
+  // keystroke would send a query per character.
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   // An empty set means "no status filter" — i.e. All. Selecting any status
   // narrows to just the checked ones; clearing them all falls back to All.
   const [selected, setSelected] = useState<Set<CustomerStatus>>(new Set())
@@ -41,27 +43,39 @@ export default function CustomerListPage({
     setPage(1)
   }
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return customers.filter((c) => {
-      const matchesQ =
-        !q ||
-        c.fullName.toLowerCase().includes(q) ||
-        c.customerId.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q)
-      const matchesS = selected.size === 0 || selected.has(c.status)
-      return matchesQ && matchesS
-    })
-  }, [customers, query, selected])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(1) // a new search starts at its own first page, not page nine
+    }, 250)
+    return () => clearTimeout(t)
+  }, [query])
 
-  // Clamped before slicing, not after. The previous version derived a safePage
-  // for the pager while the table kept slicing with the raw `page`, so a list
-  // that shrank underneath a page > 1 — someone closes customers and the
-  // refetch returns fewer rows — showed "No customers match your search" while
-  // the pager highlighted page 1 and reported "Showing 1 to 8 of N entries".
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, pageCount)
-  const pageRows = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  // Statuses are sent to the server rather than filtered here. An empty set
+  // still means "All", which the API spells as every status.
+  const statuses = useMemo(
+    () => (selected.size === 0 ? ALL_CUSTOMER_STATUSES : [...selected]),
+    [selected],
+  )
+
+  // page is 1-based in this screen and zero-based in the API.
+  const { customers, totalElements, totalPages, loading, error } = useCustomers({
+    reloadKey,
+    statuses,
+    q: debouncedQuery,
+    page: page - 1,
+    size: PAGE_SIZE,
+  })
+
+  // Clamped after the fetch, not before: deleting the last customer on page
+  // nine leaves the request pointing past the end, and the server answers with
+  // an empty page rather than an error. Snapping back keeps the table and the
+  // pager telling the same story.
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  const pageRows = customers
 
   return (
     <div>
@@ -150,7 +164,7 @@ export default function CustomerListPage({
                 </tbody>
               </table>
             </div>
-            <Pagination page={safePage} pageSize={PAGE_SIZE} total={filtered.length} onPage={setPage} />
+            <Pagination page={page} pageSize={PAGE_SIZE} total={totalElements} onPage={setPage} />
           </>
         )}
       </div>
