@@ -120,6 +120,17 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n"
 crm:
+  demo:
+    # How many customers DemoCustomerSeeder leaves the table holding, CUS-1001
+    # and CUS-1002 included. Enough rows that the list page pages, the status
+    # filter has something to filter, and an EXPLAIN over customer(status)
+    # measures something rather than two rows.
+    #
+    # A target rather than an amount to add, so restarting does not keep piling
+    # rows on. 0 turns it off, which is what to set before pointing a run at a
+    # database anyone else uses.
+    customer-count: ${CRM_DEMO_CUSTOMER_COUNT:1000}
+
   messaging:
     # Defaults are the local names, so docker-compose and the test suite are
     # unaffected and nobody has to set anything to run the project.
