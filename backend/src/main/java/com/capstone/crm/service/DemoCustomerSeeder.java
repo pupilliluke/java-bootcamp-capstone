@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -19,6 +20,7 @@ import java.util.Locale;
 //TODO: demo records only. Replace with real customer onboarding before any
 // deployment that is not a training environment.
 @Component
+@Order(1)
 public class DemoCustomerSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DemoCustomerSeeder.class);
@@ -62,6 +64,11 @@ public class DemoCustomerSeeder implements ApplicationRunner {
     // clobber a customer a demo session has since updated or closed.
     @Override
     public void run(ApplicationArguments args) {
+        // CUS-1000 sits below customer_number_seq's first value (1003), so it
+        // is deterministic without consuming or colliding with an API-assigned
+        // customer number. The interaction seeder runs after this runner and
+        // can therefore attach Joe's demo activity to a real customer row.
+        seed("CUS-1000", "Joe mama", "joe.mama@example.test", "555-0100", CustomerStatus.ACTIVE);
         seed("CUS-1001", "Amina Khan", "amina.khan@example.test", "555-0101", CustomerStatus.ACTIVE);
         seed("CUS-1002", "Ravi Singh", "ravi.singh@example.test", "555-0102", CustomerStatus.ACTIVE);
         seedBulk();
