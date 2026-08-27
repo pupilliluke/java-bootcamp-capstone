@@ -1,14 +1,19 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Same shape as the Lab 35 crm-ui config. The dev proxy is the one extra:
-// it forwards /api -> Spring Boot on :8080 so the browser avoids CORS while
-// the backend CORS config is still being set up. Leave VITE_API_BASE_URL empty
-// to use it; set it to hit a backend directly (as the lab does).
+// Same shape as the Lab 35 crm-ui config. The dev proxy is the one extra: it
+// forwards /api -> Spring Boot on :8080 so `npm run dev` stays same-origin --
+// the browser talks only to localhost:5173 and Vite forwards server-side. That
+// is not a stopgap for missing CORS config; same-origin is the deliberate
+// stance everywhere. The deployed stack reaches it a different way, by serving
+// the built UI and the API behind one ingress host (k8s/ingress.yaml), so there
+// is no CorsConfigurationSource bean by design -- see docs/threat-model.md.
+// Leave VITE_API_BASE_URL empty to use the proxy; setting it to a different
+// origin makes requests cross-origin and would need that bean added first.
 //
 // VITE_PROXY_TARGET repoints the proxy without editing this file — set it in a
 // gitignored .env.local to demo against the course cluster while the browser
-// keeps talking to localhost, which is what keeps CORS out of the picture.
+// keeps talking to localhost, which is what keeps it same-origin.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
