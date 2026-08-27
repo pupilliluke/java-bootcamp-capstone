@@ -3,6 +3,7 @@ package com.capstone.crm.api;
 import com.capstone.crm.api.dto.CustomerRequestDTO;
 import com.capstone.crm.api.dto.CustomerResponseDTO;
 import com.capstone.crm.api.dto.CustomerUpdateDTO;
+import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.service.CustomerService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,9 +15,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -39,9 +42,21 @@ public class CustomerController {
         return ResponseEntity.ok(customerService.get(customerId));
     }
 
+    /**
+     * A repeatable parameter, so several statuses can be asked for at once:
+     * {@code ?status=ACTIVE&status=PROSPECT}. Omitting it means every status
+     * except CLOSED.
+     *
+     * An unknown value is a 400 rather than a 500 with no work here: Spring
+     * cannot convert "VIP" to a CustomerStatus and raises
+     * MethodArgumentTypeMismatchException, which GlobalExceptionHandler already
+     * answers as Bad Request. CustomerControllerTest pins that, since it is a
+     * behaviour this endpoint depends on rather than one it states.
+     */
     @GetMapping
-    public ResponseEntity<List<CustomerResponseDTO>> list() {
-        return ResponseEntity.ok(customerService.list());
+    public ResponseEntity<List<CustomerResponseDTO>> list(
+            @RequestParam(name = "status", required = false) Set<CustomerStatus> status) {
+        return ResponseEntity.ok(customerService.list(status));
     }
 
     @PutMapping("/{customerId}")
