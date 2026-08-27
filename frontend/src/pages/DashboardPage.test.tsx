@@ -12,6 +12,17 @@ const mockUseCustomers = vi.mocked(useCustomers)
 const mockUseRecentInteractions = vi.mocked(useRecentInteractions)
 const mockUseCustomerCount = vi.mocked(useCustomerCount)
 
+// The dashboard now renders the admin-only pending-approvals notice behind
+// AdminOnly, which calls useAuth. These tests are about the customer surface,
+// so stub the context as an AGENT: AdminOnly then renders nothing and the
+// notice never fetches. PendingApprovalsNotice has its own test for the admin
+// path.
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    state: { status: 'authenticated', user: { username: 'agent1', role: 'AGENT' } },
+  }),
+}))
+
 const navigate = vi.fn()
 const renderPage = () => render(<DashboardPage navigate={navigate} reloadKey={0} />)
 

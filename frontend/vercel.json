@@ -1,8 +1,30 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "neuralcrm.xyz"
+        }
+      ],
+      "destination": "https://www.neuralcrm.xyz/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
-    { "source": "/api/:path*", "destination": "http://crm-student02.100.22.136.97.nip.io/api/:path*" },
-    { "source": "/actuator/:path*", "destination": "http://crm-student02.100.22.136.97.nip.io/actuator/:path*" },
-    { "source": "/:path*", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "http://crm-student02.100.22.136.97.nip.io/api/:path*"
+    },
+    {
+      "source": "/actuator/:path*",
+      "destination": "http://crm-student02.100.22.136.97.nip.io/actuator/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
   ]
 }

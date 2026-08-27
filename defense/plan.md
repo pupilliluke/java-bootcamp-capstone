@@ -40,6 +40,15 @@ Timed, deterministic, with a fallback for every step. Lab 52 requires a
 **deny/fallback beat** — a moment where something is refused and a moment where
 something is recovered.
 
+**Where the UI runs during the demo:** `https://www.neuralcrm.xyz` — the
+Vercel-served frontend, edge-proxying `/api` to the student02 backend on the
+course cluster, so every request the audience's eyes follow is same-origin
+(the stance in `docs/threat-model.md`). Sign-in is **password login**
+(`VITE_ENABLE_GSI=false`), per `frontend/README.md`; flip it only if
+`https://www.neuralcrm.xyz` has been added to the OAuth client's authorized
+JavaScript origins first. Fallbacks, in order: the `*.vercel.app` URL if DNS
+misbehaves, then `npm run dev` on the laptop proxying to the same backend.
+
 Proposed beats, all of which already work:
 
 | # | Beat | Proves | Fallback |

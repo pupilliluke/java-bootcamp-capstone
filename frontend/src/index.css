@@ -196,6 +196,39 @@ h1, h2, h3, h4 {
 
 .card h2 { font-size: 1.05rem; margin-bottom: 0.9rem; }
 
+/* Dashboard "accounts waiting for approval" notice (issue #100). A full-width
+   clickable banner in the amber the app already uses for pending/attention
+   states, so it reads as "something needs you" without a new colour. */
+.pending-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  margin: 0 0 1.1rem;
+  padding: 0.85rem 1.1rem;
+  text-align: left;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pending-notice:hover { filter: brightness(0.98); }
+
+.pending-notice__count { font-weight: 600; }
+
+.pending-notice__cta { font-size: 0.85rem; white-space: nowrap; }
+
+/* The error variant is not a button: there is nothing to click when we could
+   not read the list. It states that plainly rather than showing a count. */
+.pending-notice--error {
+  cursor: default;
+  font-weight: 400;
+}
+
 .section-title {
   font-size: 0.78rem;
   color: var(--muted);

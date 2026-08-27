@@ -3,6 +3,8 @@ import { useRecentInteractions } from '../hooks/useRecentInteractions'
 import { useCustomerCount } from '../hooks/useCustomerCount'
 import StatusBadge from '../components/StatusBadge'
 import InteractionTimeline from '../components/InteractionTimeline'
+import PendingApprovalsNotice from '../components/PendingApprovalsNotice'
+import AdminOnly from '../auth/AdminOnly'
 import { IconUsers } from '../components/icons'
 import type { Navigate } from '../nav'
 
@@ -68,6 +70,13 @@ export default function DashboardPage({
         <h1>Dashboard</h1>
         <button className="btn-primary" onClick={() => navigate({ name: 'add' })}>Add Customer</button>
       </div>
+
+      {/* Admin-only, and gated at the mount so an AGENT never makes the request.
+          Independent of the customer fetch below -- it is about pending accounts,
+          not customers, so it shows whatever the customer list is doing. */}
+      <AdminOnly fallback={null}>
+        <PendingApprovalsNotice navigate={navigate} reloadKey={reloadKey} />
+      </AdminOnly>
 
       {loading && <div className="spinner-row">Loading…</div>}
       {error && <p className="error">{error} — is the backend running on :8080?</p>}
