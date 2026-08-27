@@ -122,9 +122,11 @@ test('agent can create a customer, log an interaction, and read it back', async 
       expect(interactionResponse.status()).toBe(201)
       expect(await interactionResponse.headerValue('x-correlation-id')).toBeTruthy()
 
-      const sessionRow = page.getByRole('row').filter({ hasText: interactionNotes })
-      await expect(sessionRow).toBeVisible()
-      await expect(sessionRow).toContainText('EMAIL')
+      // The interaction history is a timeline, not a table: each entry is a
+      // list item, so there is no row role to match on.
+      const sessionEntry = page.locator('.tl-item').filter({ hasText: interactionNotes })
+      await expect(sessionEntry).toBeVisible()
+      await expect(sessionEntry).toContainText('EMAIL')
     })
 
     await test.step('Read the interaction back after remounting the customer screen', async () => {
@@ -147,9 +149,9 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       // Navigating away unmounted CustomerDetailsPage and discarded its local
       // `recorded` state. This row can now exist only if the API returned it.
-      const persistedRow = page.getByRole('row').filter({ hasText: interactionNotes })
-      await expect(persistedRow).toBeVisible()
-      await expect(persistedRow).toContainText('EMAIL')
+      const persistedEntry = page.locator('.tl-item').filter({ hasText: interactionNotes })
+      await expect(persistedEntry).toBeVisible()
+      await expect(persistedEntry).toContainText('EMAIL')
     })
   } finally {
     await testInfo.attach('api-journey.json', {
