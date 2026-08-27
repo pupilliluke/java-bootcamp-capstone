@@ -341,7 +341,10 @@ table.data tbody tr:last-child td { border-bottom: none; }
   margin-top: 1rem;
   flex-wrap: wrap;
 }
-.pagination .pages { display: flex; gap: 0.3rem; }
+/* wrap, not overflow: the window keeps this to a handful of buttons, but a
+   narrow card should fold the row rather than push it past the border. */
+.pagination .pages { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+.page-gap { padding: 0.35rem 0.2rem; color: var(--faint); font-size: 0.85rem; user-select: none; }
 .page-btn {
   min-width: 32px;
   padding: 0.35rem 0.55rem;

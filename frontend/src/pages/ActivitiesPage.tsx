@@ -14,7 +14,14 @@ import type { Navigate } from '../nav'
 const FEED_LIMIT = 40
 
 export default function ActivitiesPage({ navigate }: { navigate: Navigate }) {
-  const { customers, loading: customersLoading, error: customersError } = useCustomers()
+  // Asks for the largest page the server allows, because this feed is only as
+  // wide as the customers it knows about: useRecentInteractions fans out per
+  // customer. Taking the default page of twenty would silently narrow the
+  // "across every customer" claim below to the first twenty of them.
+  const { customers, loading: customersLoading, error: customersError } = useCustomers({
+    page: 0,
+    size: 100,
+  })
   const { interactions, loading, error } = useRecentInteractions(customers, FEED_LIMIT)
 
   const customerNames = Object.fromEntries(customers.map((c) => [c.customerId, c.fullName]))

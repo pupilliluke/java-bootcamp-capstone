@@ -33,7 +33,7 @@ const RAVI_INTERACTION = {
 
 describe('ActivitiesPage', () => {
   beforeEach(() => {
-    vi.mocked(customersApi.list).mockResolvedValue(CUSTOMERS)
+    vi.mocked(customersApi.page).mockResolvedValue({ content: CUSTOMERS, page: 0, size: 100, totalElements: CUSTOMERS.length, totalPages: 1 })
     vi.mocked(interactionsApi.list).mockImplementation(async (id: string) =>
       id === 'CUS-1001' ? [AMINA_INTERACTION] : [RAVI_INTERACTION],
     )
@@ -69,13 +69,13 @@ describe('ActivitiesPage', () => {
   })
 
   it('reports an empty book rather than an empty page', async () => {
-    vi.mocked(customersApi.list).mockResolvedValue([])
+    vi.mocked(customersApi.page).mockResolvedValue({ content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 })
     render(<ActivitiesPage navigate={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/no interactions recorded yet/i)).toBeInTheDocument())
   })
 
   it('surfaces a failure to load customers', async () => {
-    vi.mocked(customersApi.list).mockRejectedValue(new Error('backend down'))
+    vi.mocked(customersApi.page).mockRejectedValue(new Error('backend down'))
     render(<ActivitiesPage navigate={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('backend down'))
   })

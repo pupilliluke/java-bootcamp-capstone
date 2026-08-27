@@ -1,5 +1,6 @@
 import { useCustomers } from '../hooks/useCustomers'
 import { useRecentInteractions } from '../hooks/useRecentInteractions'
+import { useCustomerCount } from '../hooks/useCustomerCount'
 import StatusBadge from '../components/StatusBadge'
 import InteractionTimeline from '../components/InteractionTimeline'
 import { IconUsers } from '../components/icons'
@@ -13,17 +14,32 @@ export default function DashboardPage({
   navigate: Navigate
   reloadKey: number
 }) {
-  const { customers, loading, error } = useCustomers(reloadKey)
-  const active = customers.filter((c) => c.status === 'ACTIVE').length
-  const prospects = customers.filter((c) => c.status === 'PROSPECT').length
-  const recent = [...customers].slice(-5).reverse()
+  // Newest five, ordered by the server. This used to take the tail of the whole
+  // customer array, which only worked because the whole array was here.
+  const { customers: recent, totalElements, loading, error } = useCustomers({
+    reloadKey,
+    page: 0,
+    size: 5,
+    sort: 'createdAt',
+    direction: 'desc',
+  })
 
+  // Counts come from totals, not from counting rows. Filtering a five-row page
+  // by status would report "Active: 3" for a book of a thousand.
+  const active = useCustomerCount(['ACTIVE'], reloadKey)
+  const prospects = useCustomerCount(['PROSPECT'], reloadKey)
+
+  // Sourced from the five customers above, because there is still no endpoint
+  // that reads interactions across customers: useRecentInteractions fans out
+  // per customer, so it can only cover the ones already loaded. This is recent
+  // activity on recently added customers, not on the whole book. A paged
+  // GET /api/interactions collapses it to one call and widens it at once.
   const { interactions, loading: activityLoading, error: activityError } =
-    useRecentInteractions(customers)
+    useRecentInteractions(recent)
 
   // Id -> name, so the feed can say who each interaction belongs to without
   // the timeline component needing to know what a customer is.
-  const customerNames = Object.fromEntries(customers.map((c) => [c.customerId, c.fullName]))
+  const customerNames = Object.fromEntries(recent.map((c) => [c.customerId, c.fullName]))
 
   const today = new Date().toDateString()
   const loggedToday = interactions.filter(
@@ -43,7 +59,7 @@ export default function DashboardPage({
       {!loading && !error && (
         <>
           <div className="kpi-row">
-            <Tile label="Total Customers" value={customers.length} tone="blue" />
+            <Tile label="Total Customers" value={totalElements} tone="blue" />
             <Tile label="Active" value={active} tone="green" />
             <Tile label="Prospects" value={prospects} tone="blue" />
             <Tile label="Activities logged today" value={loggedToday} tone="amber" />

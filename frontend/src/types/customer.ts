@@ -57,3 +57,13 @@ export interface Contact {
   phone: string
 }
 
+// One page of results from a paged endpoint. Mirrors the backend's
+// PageResponse: the rows, plus enough about the whole result set for a pager
+// to render without a second request.
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
