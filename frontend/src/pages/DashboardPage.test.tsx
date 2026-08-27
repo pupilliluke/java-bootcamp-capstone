@@ -2,9 +2,15 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DashboardPage from './DashboardPage'
 import { useCustomers } from '../hooks/useCustomers'
+import { useRecentInteractions } from '../hooks/useRecentInteractions'
+import { useCustomerCount } from '../hooks/useCustomerCount'
 
 vi.mock('../hooks/useCustomers')
+vi.mock('../hooks/useRecentInteractions')
+vi.mock('../hooks/useCustomerCount')
 const mockUseCustomers = vi.mocked(useCustomers)
+const mockUseRecentInteractions = vi.mocked(useRecentInteractions)
+const mockUseCustomerCount = vi.mocked(useCustomerCount)
 
 const navigate = vi.fn()
 const renderPage = () => render(<DashboardPage navigate={navigate} reloadKey={0} />)
@@ -17,7 +23,11 @@ const customer = {
   status: 'ACTIVE' as const,
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockUseRecentInteractions.mockReturnValue({ interactions: [], loading: false, error: null })
+  mockUseCustomerCount.mockReturnValue(0)
+})
 
 describe('DashboardPage', () => {
   it('shows a loading state', () => {
@@ -43,5 +53,12 @@ describe('DashboardPage', () => {
     renderPage()
     expect(screen.getByText('Total Customers')).toBeInTheDocument()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()
+    expect(mockUseCustomers).toHaveBeenCalledWith({
+      reloadKey: 0,
+      page: 0,
+      size: 12,
+      sort: 'customerId',
+      direction: 'asc',
+    })
   })
 })
