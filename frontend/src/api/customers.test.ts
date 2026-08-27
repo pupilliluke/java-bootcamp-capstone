@@ -24,9 +24,9 @@ describe('customersApi', () => {
   it('repeats the status parameter once per status', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }), { status: 200 }))
 
-    await customersApi.list(['ACTIVE', 'CLOSED'])
+    await customersApi.page({ statuses: ['ACTIVE', 'CLOSED'] })
 
     const url = fetchMock.mock.calls[0][0] as string
     expect(url).toContain('/api/customers?status=ACTIVE&status=CLOSED')
@@ -37,9 +37,9 @@ describe('customersApi', () => {
   it('sends no query string when no status is given', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify([]), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }), { status: 200 }))
 
-    await customersApi.list()
+    await customersApi.page()
 
     expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/api\/customers$/)
   })

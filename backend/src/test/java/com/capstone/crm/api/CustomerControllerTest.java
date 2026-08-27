@@ -221,7 +221,7 @@ class CustomerControllerTest {
         String open = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "");
+        String body = listWith(agent, "?size=100");
 
         assertThat(statusesIn(body)).doesNotContain("CLOSED");
         assertThat(idsIn(body)).contains(open).doesNotContain(closed);
@@ -233,7 +233,7 @@ class CustomerControllerTest {
         String open = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "?status=CLOSED");
+        String body = listWith(agent, "?status=CLOSED&size=100");
 
         assertThat(statusesIn(body)).containsOnly("CLOSED");
         assertThat(idsIn(body)).contains(closed).doesNotContain(open);
@@ -247,10 +247,86 @@ class CustomerControllerTest {
         String active = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "?status=ACTIVE&status=CLOSED");
+        String body = listWith(agent, "?status=ACTIVE&status=CLOSED&size=100");
 
         assertThat(statusesIn(body)).containsOnly("ACTIVE", "CLOSED");
         assertThat(idsIn(body)).contains(active, closed);
+    }
+
+    // --- paging (Lab 39: bounded Pageable, sort allow-list) ----------------
+
+    // The cap is the point: a caller asking for everything gets a page, not the
+    // whole book. Without it one request can pull every row in the database.
+    @Test
+    void oversizedPageRequestIsCappedRatherThanHonoured() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        String body = listWith(agent, "?size=100000");
+
+        assertThat((int) JsonPath.read(body, "$.size")).isEqualTo(100);
+    }
+
+    // Page metadata is what lets the UI render a pager without a second call.
+    @Test
+    void pageResponseCarriesTheTotalsAPagerNeeds() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+        createCustomer(agent);
+
+        String body = listWith(agent, "?page=0&size=1");
+
+        assertThat((int) JsonPath.read(body, "$.page")).isZero();
+        assertThat((int) JsonPath.read(body, "$.size")).isEqualTo(1);
+        assertThat(((Number) JsonPath.read(body, "$.totalElements")).longValue()).isGreaterThanOrEqualTo(2);
+        assertThat((int) JsonPath.read(body, "$.totalPages")).isGreaterThanOrEqualTo(2);
+        assertThat(idsIn(body)).hasSize(1);
+    }
+
+    // A page past the end is an empty page, not an error: deleting the last
+    // customer on page nine should not turn the next refresh into a 500.
+    @Test
+    void pageBeyondTheEndIsEmptyRatherThanAnError() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        String body = listWith(agent, "?page=9999&size=20");
+
+        assertThat(idsIn(body)).isEmpty();
+    }
+
+    // Sort is an allow-list. An unknown property is the caller's mistake, so
+    // 400 -- letting it reach JPA as a property path would surface as a 500.
+    @Test
+    void unknownSortPropertyIsRejectedAsABadRequest() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+
+        mockMvc.perform(get("/api/customers?sort=passwordHash")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void allowedSortPropertyIsAccepted() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        mockMvc.perform(get("/api/customers?sort=fullName&direction=desc")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isOk());
+    }
+
+    // Search runs in the database, not the browser: filtering a page
+    // client-side only ever searches the rows that page happens to hold.
+    @Test
+    void searchMatchesAcrossTheWholeBookNotJustOnePage() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        String wanted = createNamed(agent, "Zzyzx Findable");
+        for (int i = 0; i < 3; i++) createCustomer(agent);
+
+        String body = listWith(agent, "?q=zzyzx&size=5");
+
+        assertThat(idsIn(body)).containsExactly(wanted);
     }
 
     // 400 rather than 500. Nothing in CustomerController produces this: Spring
@@ -273,11 +349,13 @@ class CustomerControllerTest {
     }
 
     private static List<String> idsIn(String body) {
-        return JsonPath.read(body, "$[*].customerId");
+        // The list endpoint pages, so the rows are under content rather than at
+        // the root of the response.
+        return JsonPath.read(body, "$.content[*].customerId");
     }
 
     private static List<String> statusesIn(String body) {
-        return JsonPath.read(body, "$[*].status");
+        return JsonPath.read(body, "$.content[*].status");
     }
 
     // Created and then closed through update(), because that is how a customer
@@ -303,6 +381,17 @@ class CustomerControllerTest {
                         .content("""
                                 {"fullName":"Case Study","email":"%s","phone":"555-0000","status":"ACTIVE"}
                                 """.formatted(randomEmail())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.customerId");
+    }
+
+    // Same as createCustomer, with a name the search test can look for.
+    private String createNamed(String token, String fullName) throws Exception {
+        String body = mockMvc.perform(post("/api/customers")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus(fullName, randomEmail(), "ACTIVE")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.customerId");
