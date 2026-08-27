@@ -23,7 +23,7 @@ describe('interactionsApi', () => {
     const interactions = await interactionsApi.list('CUS / 1001')
 
     expect(fetchMock).toHaveBeenCalledOnce()
-    expect(fetchMock.mock.calls[0][0]).toContain('/api/customers/CUS%20%2F%201001/interactions')
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/v1/customers/CUS%20%2F%201001/interactions')
     expect(interactions).toEqual([
       {
         interactionId: 'INT-1001',

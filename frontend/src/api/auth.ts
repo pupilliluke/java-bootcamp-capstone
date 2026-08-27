@@ -9,7 +9,7 @@ export interface LoginResponse {
   role: UserRole
 }
 
-// POST /api/auth/register body (RegisterRequest). Role is assigned server-side
+// POST /api/v1/auth/register body (RegisterRequest). Role is assigned server-side
 // (AGENT, enabled=false); the client never sends one.
 export interface RegisterRequest {
   username: string
@@ -23,7 +23,7 @@ export const authApi = {
   // through the "your session has ended" path instead of showing the error.
   login(username: string, password: string): Promise<LoginResponse> {
     return http<LoginResponse>(
-      '/api/auth/login',
+      '/api/v1/auth/login',
       { method: 'POST', body: JSON.stringify({ username, password }) },
       undefined,
       { intercept401: false },
@@ -35,8 +35,21 @@ export const authApi = {
   // is a failed registration, not an expired session.
   register(body: RegisterRequest): Promise<unknown> {
     return http<unknown>(
-      '/api/auth/register',
+      '/api/v1/auth/register',
       { method: 'POST', body: JSON.stringify(body) },
+      undefined,
+      { intercept401: false },
+    )
+  },
+
+  // Google Sign-In. Sends the ID token from Google Identity Services and gets
+  // back the same session shape as password login. intercept401 off: an invalid
+  // token is a failed sign-in, and a first-time sign-in answers 403 (pending
+  // approval) — neither is an expired session, so let LoginPage show the message.
+  googleLogin(idToken: string): Promise<LoginResponse> {
+    return http<LoginResponse>(
+      '/api/v1/auth/google',
+      { method: 'POST', body: JSON.stringify({ idToken }) },
       undefined,
       { intercept401: false },
     )

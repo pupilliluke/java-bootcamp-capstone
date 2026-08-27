@@ -8,6 +8,7 @@ import type { Channel, Interaction } from '../types/customer'
 import type { Navigate } from '../nav'
 import StatusBadge from '../components/StatusBadge'
 import DemoTag from '../components/DemoTag'
+import InteractionTimeline from '../components/InteractionTimeline'
 import { IconBuilding } from '../components/icons'
 import { MOCK_CONTACTS } from '../mock/mockData'
 
@@ -214,22 +215,7 @@ export default function CustomerDetailsPage({
             )}
             {/* Not gated on interactionsError: a failed reload must not hide
                 interactions that were saved successfully. */}
-            {interactions.length > 0 && (
-                <div className="table-wrap">
-                  <table className="data">
-                    <thead><tr><th>Channel</th><th>Notes</th><th>Recorded</th></tr></thead>
-                    <tbody>
-                      {interactions.map((it) => (
-                        <tr key={it.interactionId}>
-                          <td><span className="badge badge-channel">{it.channel}</span></td>
-                          <td>{it.notes}</td>
-                          <td className="muted">{new Date(it.createdAt).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-            )}
+            {interactions.length > 0 && <InteractionTimeline interactions={interactions} />}
           </div>
         )}
       </div>

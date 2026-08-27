@@ -48,11 +48,11 @@ flowchart TB
 
 | Path | Public | AGENT | ADMIN |
 | ---- | ------ | ----- | ----- |
-| `/api/auth/login` | ✅ | ✅ | ✅ |
+| `/api/v1/auth/login` | ✅ | ✅ | ✅ |
 | `/actuator/health` and probes | ✅ | ✅ | ✅ |
-| `/api/customers/**` | ❌ | ✅ | ✅ |
-| `/api/interactions/**` | ❌ | ✅ | ✅ |
-| `/api/admin/**` | ❌ | ❌ 403 | ✅ |
+| `/api/v1/customers/**` | ❌ | ✅ | ✅ |
+| `/api/v1/interactions/**` | ❌ | ✅ | ✅ |
+| `/api/v1/admin/**` | ❌ | ❌ 403 | ✅ |
 | anything else | ❌ | authenticated | authenticated |
 
 ## Authentication flow
@@ -65,7 +65,7 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant JWT as JwtService
 
-  UI->>API: POST /api/auth/login
+  UI->>API: POST /api/v1/auth/login
   API->>DB: findByUsername
   DB-->>API: app_user row with BCrypt hash and role
   API->>API: passwordEncoder.matches
@@ -132,8 +132,8 @@ The remaining messaging gaps are the outbox and a durable consumer side effect.
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
 flowchart TB
-  Ctrl["InteractionController, POST /api/interactions"]
-  Read["GET /api/customers/{id}/interactions"]
+  Ctrl["InteractionController, POST /api/v1/interactions"]
+  Read["GET /api/v1/customers/{id}/interactions"]
   Svc["InteractionService.createAndPublish"]
   Cust["CustomerService, in-memory map, validation only"]
   IntT[("interaction table")]
@@ -197,7 +197,7 @@ flowchart TB
 
 | | Today | Target | Why |
 | ---- | ----- | ------ | --- |
-| Interaction record | row in `interaction`, written before publishing and exposed by GET | keep this behavior | The browser journey now verifies persistence instead of trusting a `202 Accepted`. |
+| Interaction record | row in `interaction`, written before publishing and exposed by GET | keep this behavior | The create endpoint returns `201 Created`, and the browser journey independently verifies persistence by reading the interaction back. |
 | Customer lookup | in-memory map | `customer` table | Survives a restart. Also what Lab 50's UI-to-database flow needs. |
 | Publish | directly from the service | outbox row, published by a relay | Writing the row and publishing separately is a dual write: the transaction can commit and the publish fail, leaving the database and the log disagreeing. One transaction removes the gap. |
 | Idempotency store | `ConcurrentHashMap` | `processed_event` table | Per-JVM state is per-replica state. With more than one pod, each has its own set, and the exactly-once guarantee stops holding. |

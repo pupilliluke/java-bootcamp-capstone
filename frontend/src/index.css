@@ -196,6 +196,39 @@ h1, h2, h3, h4 {
 
 .card h2 { font-size: 1.05rem; margin-bottom: 0.9rem; }
 
+/* Dashboard "accounts waiting for approval" notice (issue #100). A full-width
+   clickable banner in the amber the app already uses for pending/attention
+   states, so it reads as "something needs you" without a new colour. */
+.pending-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  margin: 0 0 1.1rem;
+  padding: 0.85rem 1.1rem;
+  text-align: left;
+  background: var(--amber-soft);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font: inherit;
+  cursor: pointer;
+}
+
+.pending-notice:hover { filter: brightness(0.98); }
+
+.pending-notice__count { font-weight: 600; }
+
+.pending-notice__cta { font-size: 0.85rem; white-space: nowrap; }
+
+/* The error variant is not a button: there is nothing to click when we could
+   not read the list. It states that plainly rather than showing a count. */
+.pending-notice--error {
+  cursor: default;
+  font-weight: 400;
+}
+
 .section-title {
   font-size: 0.78rem;
   color: var(--muted);
@@ -341,7 +374,10 @@ table.data tbody tr:last-child td { border-bottom: none; }
   margin-top: 1rem;
   flex-wrap: wrap;
 }
-.pagination .pages { display: flex; gap: 0.3rem; }
+/* wrap, not overflow: the window keeps this to a handful of buttons, but a
+   narrow card should fold the row rather than push it past the border. */
+.pagination .pages { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; max-width: 100%; }
+.page-gap { padding: 0.35rem 0.2rem; color: var(--faint); font-size: 0.85rem; user-select: none; }
 .page-btn {
   min-width: 32px;
   padding: 0.35rem 0.55rem;
@@ -464,6 +500,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .kpi-icon.blue { background: var(--primary-soft); color: var(--primary); }
 .kpi-icon.green { background: var(--green-soft); color: var(--green); }
 .kpi-icon.red { background: var(--red-soft); color: var(--red); }
+.kpi-icon.amber { background: var(--amber-soft); color: var(--amber); }
 
 /* ============ reports layout ============ */
 .reports-layout { display: grid; grid-template-columns: 210px 1fr; gap: 1.1rem; align-items: start; }
@@ -673,4 +710,204 @@ table.data tbody tr:last-child td { border-bottom: none; }
   width: auto;
   margin: 0;
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Interaction timeline
+   Replaces the flat interaction table on the customer Activities tab. Plain
+   CSS on the existing tokens, so it inherits the palette rather than
+   introducing a second one. The rail is a border on the list, not a pseudo
+   element per row, which keeps it continuous when a row wraps to two lines.
+--------------------------------------------------------------------------- */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tl-group + .tl-group { margin-top: 1.25rem; }
+
+/* Sticky so the date stays visible while scrolling a long history. */
+.tl-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 0.6rem;
+  padding: 0.15rem 0;
+  background: var(--surface);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.tl-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  border-left: 2px solid var(--border);
+}
+
+.tl-item {
+  position: relative;
+  padding: 0 0 0 1.1rem;
+}
+
+.tl-item + .tl-item { margin-top: 0.9rem; }
+
+/* The node sits on the rail: half its width back over the 2px border. */
+.tl-node {
+  position: absolute;
+  left: calc(-0.5rem - 1px);
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.tl-body {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tl-item:hover .tl-body {
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 3px rgb(27 39 51 / 8%);
+}
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+
+.tl-channel {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.tl-time {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.tl-notes {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Monospace and truncated: it is an identifier to copy or match against a log
+   line, not prose to read. */
+.tl-id {
+  margin: 0.35rem 0 0;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Per-channel accents. Only the node and the badge change, so the timeline
+   still reads as one object rather than three competing colour schemes. */
+.tl-phone .tl-node { background: var(--primary); }
+
+.tl-email .tl-node { background: var(--accent); }
+.tl-email .tl-channel { background: var(--accent-soft); color: var(--accent-hover); }
+
+.tl-chat .tl-node { background: var(--green); }
+.tl-chat .tl-channel { background: var(--green-soft); color: var(--green); }
+
+@media (max-width: 640px) {
+  .tl-head { flex-wrap: wrap; gap: 0.35rem; }
+  .tl-body { padding: 0.55rem 0.6rem; }
+}
+
+/* Timeline on the dashboard: one feed across customers, so each row names its
+   customer and is a way into that record. Both are inert on a customer's own
+   page, where every row is theirs already. */
+.tl-customer {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tl-clickable { cursor: pointer; }
+
+.tl-clickable:hover {
+  border-color: var(--primary);
+  box-shadow: 0 1px 4px rgb(0 105 170 / 12%);
+}
+
+.tl-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Connection panel (Settings)
+   A definition list rather than a table: these are label/value pairs, not rows
+   of like things, and a table would promise a structure that is not there.
+--------------------------------------------------------------------------- */
+
+.conn-list {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  align-items: baseline;
+}
+
+.conn-list dt {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.conn-list dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.conn-list dd .muted { font-size: 0.82rem; }
+
+/* The dot carries colour; the word beside it carries the meaning. Colour is
+   never the only signal, so this still reads without it. */
+.conn-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.conn-up { background: var(--green); }
+.conn-down { background: var(--red); }
+.conn-unknown { background: var(--faint); }
+
+@media (max-width: 640px) {
+  .conn-list { grid-template-columns: 1fr; gap: 0.15rem 0; }
+  .conn-list dd { margin-bottom: 0.5rem; }
 }

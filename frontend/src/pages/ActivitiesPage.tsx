@@ -1,11 +1,35 @@
-import DemoTag from '../components/DemoTag'
+import { useCustomers } from '../hooks/useCustomers'
+import { useRecentInteractions } from '../hooks/useRecentInteractions'
+import InteractionTimeline from '../components/InteractionTimeline'
 import { IconActivities } from '../components/icons'
 import type { Navigate } from '../nav'
-import { MOCK_ACTIVITIES } from '../mock/mockData'
 
-// Screen 5 (global view). There is no GET to list interactions, so this history
-// is demo data. Real recording lives on a customer's Activities tab.
+// Screen 5: interactions across the whole book, read from the API.
+//
+// This used to render a fixed array of invented rows because nothing could list
+// interactions across customers. It still cannot: there is no
+// GET /api/v1/interactions, so useRecentInteractions fans out per customer and the
+// cap inside it bounds how much of the book this covers. That is a real limit
+// and it is stated on the page rather than hidden, but the rows are now real.
+const FEED_LIMIT = 40
+
 export default function ActivitiesPage({ navigate }: { navigate: Navigate }) {
+  // Asks for the largest page the server allows, because this feed is only as
+  // wide as the customers it knows about: useRecentInteractions fans out per
+  // customer. Taking the default page of twenty would silently narrow the
+  // "across every customer" claim below to the first twenty of them.
+  const { customers, loading: customersLoading, error: customersError } = useCustomers({
+    page: 0,
+    size: 100,
+    sort: 'customerId',
+    direction: 'asc',
+  })
+  const { interactions, loading, error } = useRecentInteractions(customers, FEED_LIMIT)
+
+  const customerNames = Object.fromEntries(customers.map((c) => [c.customerId, c.fullName]))
+  const busy = customersLoading || loading
+  const failed = customersError || error
+
   return (
     <div>
       <div className="page-header">
@@ -15,32 +39,24 @@ export default function ActivitiesPage({ navigate }: { navigate: Navigate }) {
         </button>
       </div>
       <div className="card">
-        <div className="toolbar" style={{ marginBottom: '0.6rem' }}>
-          <span className="section-title" style={{ margin: 0 }}>Activity history</span>
-          <DemoTag />
-        </div>
+        <p className="section-title">Activity history</p>
         <p className="muted" style={{ marginTop: 0 }}>
-          To record a real interaction, open a customer → Activities tab (posts to{' '}
-          <code>/api/interactions</code>).
+          Interactions across every customer, newest first. To record one, open a customer
+          and use the Activities tab.
         </p>
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr><th>Date</th><th>Type</th><th>Subject</th><th>Assigned To</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {MOCK_ACTIVITIES.map((a, i) => (
-                <tr key={i}>
-                  <td>{a.date}</td>
-                  <td>{a.type}</td>
-                  <td>{a.subject}</td>
-                  <td>{a.assignedTo}</td>
-                  <td><span className={`badge badge-${a.status}`}>{a.status}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+        {busy && <div className="spinner-row">Loading activity…</div>}
+        {!busy && failed && <p className="error" role="alert">{failed}</p>}
+        {!busy && !failed && interactions.length === 0 && (
+          <p className="empty">No interactions recorded yet.</p>
+        )}
+        {!busy && interactions.length > 0 && (
+          <InteractionTimeline
+            interactions={interactions}
+            customerNames={customerNames}
+            onSelect={(customerId) => navigate({ name: 'details', customerId })}
+          />
+        )}
       </div>
     </div>
   )

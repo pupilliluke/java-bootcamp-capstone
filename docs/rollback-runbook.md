@@ -12,13 +12,29 @@ version that broke.
 
 | Field | Value |
 | ----- | ----- |
-| Cluster | `k3d-crm-local`, namespace `crm` |
-| Deployment | `crm-api` |
-| Tag deployed | `crm-api:dev` |
-| **Digest** | `sha256:ebfe1486a16d77a6dedc0c5f8ed92eec56618f55fd1cdf53d789667d016e69b2` |
-| Commit | `5f1bb6d8013f204db7fd5965d6604352ba5fd889` (`org.opencontainers.image.revision`) |
-| Ingress | `crm-api.localtest.me` via Traefik on `:8088` |
+| Registry | `ghcr.io/pupilliluke/crm-api`, public (anonymous pull returns 200) |
+| Deployment | `crm-api`, pinned by digest in `k8s/deployment.yaml` |
+| **Digest** | `sha256:4aab674cdc6f919032d01a4864bf52ea1239e68df22afa5ed68453c64979f0c3` |
+| Commit | `3d2499750abf857f20b99aabf0a484e2a310da1f` (merge of #73) |
+| Tags on that build | `:3d24997�` (commit SHA) and `:develop` |
+| Published by | CI run [33010455301](https://github.com/pupilliluke/java-bootcamp-capstone/actions/runs/33010455301), `publish` job |
 | Verification | readiness, then login, then an authenticated `GET /api/customers` |
+
+The previous entry, kept because a rollback target is only useful if it is
+written down before it is needed:
+
+| Field | Value |
+| ----- | ----- |
+| Cluster | `k3d-crm-local`, namespace `crm` |
+| Tag deployed | `crm-api:dev` (local daemon only, never pushed) |
+| Local image ID | `sha256:ebfe1486a16d77a6dedc0c5f8ed92eec56618f55fd1cdf53d789667d016e69b2` |
+| Commit | `5f1bb6d8013f204db7fd5965d6604352ba5fd889` |
+| Ingress | `crm-api.localtest.me` via Traefik on `:8088` |
+
+That older row is a local image ID, not a registry digest, and the two are not
+interchangeable -- see the containerd note below. It cannot be rolled back to
+from a cluster that is not the laptop that built it, which is the gap the
+registry closes.
 
 The digest is the row that earns this table. Rolling back to "the previous tag"
 is not a thing that exists — the tag moved, and what it used to point at may be
@@ -32,9 +48,23 @@ docker image inspect crm-api:dev --format '{{.Id}}'
 docker image inspect crm-api:dev --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
 ```
 
-`.Id` rather than `.RepoDigests` because nothing is pushed to a registry yet. Once
-images are pushed, `{{index .RepoDigests 0}}` is the value to record and the
-Deployment can pin `crm-api@sha256:...` directly instead of a tag.
+Those two commands read a local build. For anything deployed, the value to record
+is the **repo digest** printed by the `publish` job's run summary -- that is what
+`k8s/deployment.yaml` pins and what any cluster can pull. `.Id` is only the right
+answer for an image that was never pushed, which is now true of nothing that
+reaches a cluster.
+
+To confirm a pinned digest is pullable without credentials, ask the registry the
+way a kubelet would:
+
+```
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:pupilliluke/crm-api:pull&service=ghcr.io" | jq -r .token)
+curl -s -o /dev/null -w '%{http_code}
+' -H "Authorization: Bearer $TOKEN"   -H 'Accept: application/vnd.oci.image.manifest.v1+json'   "https://ghcr.io/v2/pupilliluke/crm-api/manifests/sha256:<digest>"
+```
+
+200 means public and no `imagePullSecret` is needed. 401 or 403 means the package
+is private and the namespace needs one.
 
 One thing to know before trusting a digest against this cluster: `k3d image
 import` loads into containerd, which computes its own image ID. Docker reports
@@ -304,3 +334,35 @@ images, which needs the pipeline to build and push an image per commit — the
 `package` job currently produces a jar and a checksum, not an image.
 
 That gap is worth naming in the defence rather than hoping nobody asks.
+
+## Rehearsal evidence — course cluster (2026-08-27)
+
+The `OWN_CLUSTER=0` mode described above was run for real against the shared
+cluster, so the sentence "rehearsed on the cluster it would actually be
+performed on" is now a dated fact rather than a design goal:
+
+```
+OWN_CLUSTER=0 NS=student02 INGRESS=100.22.136.97:80 \
+  HOST_HEADER=crm-student02.100.22.136.97.nip.io bash k8s/smoke.sh
+```
+
+All checks passed. Observed:
+
+- setup steps 1–3 skipped with their reasons printed, exactly as designed —
+  in particular the Secret was left alone, protecting the real credential
+- baseline: readiness 200 through the ingress, login issued a token,
+  authenticated read 200, anonymous read 401
+- break: `crm-api:does-not-exist` produced a second pod in `ErrImagePull`
+  while the digest-pinned pod stayed `1/1 Running`; the rollout did not
+  converge; **the ingress served 200 throughout** — the bad version never
+  reached a user
+- recover: `rollout undo` restored
+  `ghcr.io/pupilliluke/crm-api@sha256:92d02fdf...` (matched against the
+  image recorded before the break), readiness returned 200, and anonymous
+  reads were still 401 afterwards
+
+Deployment context for this run — namespace, digest, ingress host, and the
+per-student ConfigMap values — is recorded in
+`course-cluster-deployment.md`. The caveat above still holds: this breaks
+the deployment for about a minute, so it is a rehearsal to run before demo
+day, not during it.

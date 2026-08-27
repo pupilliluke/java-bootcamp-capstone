@@ -1,5 +1,6 @@
 package com.capstone.crm.api;
 
+import com.capstone.crm.entity.Interaction;
 import com.capstone.crm.messaging.event.InteractionEvent;
 import com.capstone.crm.messaging.producer.InteractionEventProducer;
 import com.capstone.crm.repository.InteractionRepository;
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -45,12 +47,12 @@ class InteractionControllerTest {
     void agentCanCreateAndReadBackAnInteraction() throws Exception {
         String token = jwtService.issueToken("agent1", "AGENT");
 
-        mockMvc.perform(post("/api/interactions")
+        mockMvc.perform(post("/api/v1/interactions")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Correlation-Id", "journey-test")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CREATE_BODY))
-                .andExpect(status().isAccepted())
+                .andExpect(status().isCreated())
                 .andExpect(header().string("X-Correlation-Id", "journey-test"))
                 .andExpect(jsonPath("$.interactionId").isNotEmpty())
                 .andExpect(jsonPath("$.customerId").value("CUS-1001"))
@@ -58,12 +60,22 @@ class InteractionControllerTest {
                 .andExpect(jsonPath("$.notes").value("Renewal follow-up"));
 
         assertThat(interactions.count()).isEqualTo(1);
+        // The event keeps notes and now also carries the actor (issue #86).
         verify(producer).publish(argThat((InteractionEvent event) ->
                 event.customerId().equals("CUS-1001")
                         && event.channel().equals("EMAIL")
-                        && event.notes().equals("Renewal follow-up")));
+                        && event.notes().equals("Renewal follow-up")
+                        && "agent1".equals(event.actor())));
 
-        mockMvc.perform(get("/api/customers/CUS-1001/interactions")
+        // The row records both audit columns from the request that made it: the
+        // correlation id (issue #88, what the durability SELECT reads) and the
+        // authenticated actor (issue #86). This is the persistence-layer proof
+        // behind the durability rehearsal in docs/frontend-persistence-demo.md.
+        Interaction saved = interactions.findAll().get(0);
+        assertThat(saved.getCorrelationId()).isEqualTo("journey-test");
+        assertThat(saved.getCreatedBy()).isEqualTo("agent1");
+
+        mockMvc.perform(get("/api/v1/customers/CUS-1001/interactions")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -76,16 +88,54 @@ class InteractionControllerTest {
 
     @Test
     void anonymousUserCannotReadCustomerInteractions() throws Exception {
-        mockMvc.perform(get("/api/customers/CUS-1001/interactions"))
+        mockMvc.perform(get("/api/v1/customers/CUS-1001/interactions"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void interactionsForAnUnknownCustomerAreNotFound() throws Exception {
-        mockMvc.perform(get("/api/customers/CUS-9999/interactions")
+        mockMvc.perform(get("/api/v1/customers/CUS-9999/interactions")
                         .header("Authorization", "Bearer "
                                 + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Customer not found: CUS-9999"));
+    }
+
+    // The lab 49/50 named failure path: invalid value -> 400, no row, no event.
+    // "FAX" is under the old 50-character limit, so before the channel became a
+    // closed set this request was accepted, stored and published.
+    @Test
+    void unknownChannelIsRejectedWithNoRowAndNoEvent() throws Exception {
+        mockMvc.perform(post("/api/v1/interactions")
+                        .header("Authorization", "Bearer "
+                                + jwtService.issueToken("agent1", "AGENT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"CUS-1001","channel":"FAX","notes":"n"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Validation failed: channel - must be one of PHONE, EMAIL, CHAT; "));
+
+        assertThat(interactions.count()).isZero();
+        verifyNoInteractions(producer);
+    }
+
+    // Case matters: the database CHECK is case-sensitive, so accepting "email"
+    // at the API would store a row the constraint refuses. Refuse it here, at
+    // the door, with the same field error as any other unknown value.
+    @Test
+    void lowercaseChannelIsRejected() throws Exception {
+        mockMvc.perform(post("/api/v1/interactions")
+                        .header("Authorization", "Bearer "
+                                + jwtService.issueToken("agent1", "AGENT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"CUS-1001","channel":"email","notes":"n"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        assertThat(interactions.count()).isZero();
+        verifyNoInteractions(producer);
     }
 }

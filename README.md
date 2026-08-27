@@ -4,20 +4,24 @@ A customer relationship management application: a React front end, a Spring Boot
 REST API with JWT authentication, Kafka messaging for customer interactions, and
 PostgreSQL for accounts.
 
+The hosted UI lives at **<https://www.neuralcrm.xyz>** (Vercel, edge-proxying
+`/api` to the deployed backend — see `frontend/README.md`).
+
 ## Project status
 
 | Area | Current contents |
 | --- | --- |
 | Front end | React and TypeScript, nine screens behind a login guard |
 | Backend | Spring Boot REST API, JWT authentication and roles, Kafka producer and consumer |
-| Database | PostgreSQL with Flyway for `app_user` and durable `interaction` rows; customers are still in memory |
+| Database | PostgreSQL with Flyway: `app_user`, `customer`, `interaction`, and processed-event rows, all durable |
 | Kafka messaging | Versioned interaction events, idempotent consumer processing, retry and dead-letter-topic configuration |
 | Tests | Backend/frontend tests, embedded Kafka and real-PostgreSQL integration coverage, plus a Playwright browser journey |
 | Docs | Six planning documents in `docs/`, starting with `docs/backlog.md` |
 | Defense, reports | Directories reserved for project material |
 
-**What is not built yet:** customers still reset on restart. Interactions are
-stored durably and can be read back while their customer exists.
+**What is not built yet:** the contacts and reports screens still run on demo
+data — every panel that does carries a "Demo data" tag. Activities are persisted
+interactions read from the API.
 
 ## Features
 
@@ -29,7 +33,7 @@ the customer data loaded with it.
 - Sign in, sign out, and a sidebar for moving between screens.
 - Dashboard, customer list with paging, customer details, and an add-customer form.
 - Log an interaction and read its persisted history from the customer details screen.
-- Contacts, activities, and reports screens.
+- Contacts and reports screens, plus a real cross-customer activity timeline.
 
 Screens navigate through React state rather than a router library, which keeps
 the dependency list to React alone. The trade is that there are no URLs: the
@@ -38,10 +42,10 @@ browser back button does nothing and a refresh returns you to the dashboard.
 Two things are deliberately honest rather than finished:
 
 - **Editing a customer is disabled.** The form opens and shows a message
-  explaining that the API has no `PUT /api/customers` yet, and the save button
+  explaining that the API has no `PUT /api/v1/customers` yet, and the save button
   stays greyed out.
-- **Contacts, activities, and reports run on hardcoded data**, because no
-  endpoint serves them. Every panel that does carries a "Demo data" tag so
+- **Contacts and reports run on hardcoded data**, because no endpoint serves
+  them. Every panel that does carries a "Demo data" tag so
   fabricated rows are never mistaken for real ones.
 
 The bearer token is held in memory, not `localStorage`, so a script injected
@@ -55,15 +59,22 @@ from the API clears the session and returns to the login screen.
 - List all customers.
 - Validate incoming customer requests.
 - Return structured errors for missing customers, duplicate customer IDs, and invalid requests.
-- Seed two demo customers on startup: `CUS-1001` and `CUS-1002`.
+- Seed three demo customers on startup: Joe mama (`CUS-1000`), Amina Khan
+  (`CUS-1001`), and Ravi Singh (`CUS-1002`).
 
-Customer data is stored in memory and resets when the application restarts.
+Customer rows are durable in PostgreSQL (`V3__customer.sql`); the seeder skips
+any customer that already exists, so restarts neither wipe nor duplicate them.
+
+Four persisted demo interactions give the dashboard and Activities timeline a
+useful initial state. Their fixed IDs make startup idempotent, and they are
+inserted directly rather than published as Kafka events. Set
+`CRM_DEMO_SEED_INTERACTIONS=false` to disable synthetic activity.
 
 ### Kafka interaction messaging
 
-- Accept interaction requests through `POST /api/interactions`.
+- Accept interaction requests through `POST /api/v1/interactions`.
 - Save each accepted interaction before publishing its event.
-- Read a customer's interactions through `GET /api/customers/{customerId}/interactions`.
+- Read a customer's interactions through `GET /api/v1/customers/{customerId}/interactions`.
 - Create a Kafka event with a UUID event ID, interaction ID, event type, version, timestamp, customer ID, channel, and notes.
 - Publish events to the versioned topic named by `CRM_INTERACTION_TOPIC`, `crm.interaction.v1` by default.
 - Use `customerId` as the Kafka message key to preserve ordering for one customer.
@@ -203,22 +214,72 @@ docker compose down
 Add `-v` to that only when you want to wipe the database — it deletes the volume,
 so the schema and every row go with it.
 
+## Run it on the course cluster
+
+Backend on the shared k3s cluster (one namespace per student), UI on your
+laptop proxying to it. Full record, evidence, and demo pre-flight:
+`docs/course-cluster-deployment.md`.
+
+### Deploy
+
+1. `copy k8s\cluster.env.example .env.cluster` (works in cmd and PowerShell)
+2. Fill `.env.cluster` from your row of the credentials sheet
+3. `bash k8s/cluster-deploy.sh` — **in Git Bash**
+
+Safe to re-run: the Secret is created only if absent, everything else is
+apply/patch. Step 3 really does need Git Bash — in cmd and PowerShell, plain
+`bash` is WSL's, which cannot read Windows paths; from those shells run
+`"C:\Program Files\Git\bin\bash.exe" k8s/cluster-deploy.sh` instead (the
+script detects WSL and says so rather than failing confusingly).
+
+### View it
+
+1. Create `frontend/.env.local` containing the line `VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io`
+2. `npm --prefix frontend run dev`
+3. Open <http://localhost:5173> and sign in with the demo accounts below
+
+The browser stays on localhost and Vite forwards `/api` server-side, so CORS
+never enters the picture.
+
+### Watch it
+
+Students have no SSH — `kubectl` against the cluster API *is* the terminal on
+the backend. Set `KUBECONFIG` to your `studentNN.yaml` once per shell, then:
+
+| What | Command |
+| ---- | ------- |
+| Pods, live | `kubectl -n studentNN get pods -w` |
+| Application log, live | `kubectl -n studentNN logs -f deploy/crm-api` |
+| Health through the ingress | `curl http://crm-studentNN.100.22.136.97.nip.io/actuator/health/readiness` |
+| Your schema in SQL | `psql -h 100.22.136.97 -U studentNN -d bootcamp` |
+| Your Kafka topic, live | `docker run --rm edenhill/kcat:1.7.1 -b 100.22.136.97:9092 -t studentNN.crm.interaction.v1 -C -o beginning` |
+
+Record an interaction in the UI with the log window open: one correlation id,
+on the HTTP request line and the Kafka consumer line.
+
+### Break and recover
+
+Rehearsed with dated evidence in `docs/rollback-runbook.md` — a bad image
+that never reaches a user, undone with one `kubectl rollout undo`. Rehearse
+before demo day, never during.
+
 ## API endpoints
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/auth/login` | Exchange a username and password for a bearer token |
-| `GET` | `/api/customers` | List customers |
-| `GET` | `/api/customers/{customerId}` | Get one customer |
-| `POST` | `/api/customers` | Create a customer |
-| `PUT` | `/api/customers/{customerId}` | Update a customer |
-| `DELETE` | `/api/customers/{customerId}` | Soft-delete a customer (ADMIN only) |
-| `POST` | `/api/interactions` | Publish an interaction event |
-| `GET` | `/api/customers/{customerId}/interactions` | Read persisted interaction history |
+| `POST` | `/api/v1/auth/login` | Exchange a username and password for a bearer token |
+| `GET` | `/api/v1/customers` | List customers |
+| `GET` | `/api/v1/customers/{customerId}` | Get one customer |
+| `POST` | `/api/v1/customers` | Create a customer |
+| `PUT` | `/api/v1/customers/{customerId}` | Update a customer |
+| `DELETE` | `/api/v1/customers/{customerId}` | Soft-delete a customer (ADMIN only) |
+| `POST` | `/api/v1/interactions` | Publish an interaction event |
+| `GET` | `/api/v1/customers/{customerId}/interactions` | Read persisted interaction history |
 
 The interaction endpoint accepts `customerId`, `channel`, and `notes`. It saves
-the interaction, publishes the event, and returns `202 Accepted`. The customer
-details screen reads the resulting history from the nested GET endpoint.
+the interaction, publishes the event, and returns `201 Created` with the stored
+interaction in the response body. The customer details screen reads the
+resulting history from the nested GET endpoint.
 
 ## Test the project
 
@@ -317,7 +378,7 @@ There is no `.env` in a deployed environment. Both imports skip, and the same ke
 
 Two accounts are seeded into the `app_user` table on first startup, with BCrypt
 password hashes — they are rows in PostgreSQL, not hardcoded users.
-`POST /api/auth/login` returns a bearer token to send as
+`POST /api/v1/auth/login` returns a bearer token to send as
 `Authorization: Bearer <token>`.
 
 | Username | Password | Role |
@@ -325,7 +386,7 @@ password hashes — they are rows in PostgreSQL, not hardcoded users.
 | `agent1` | `agent1` | AGENT |
 | `admin1` | `admin1` | ADMIN |
 
-`/api/customers` and `/api/interactions` require AGENT or ADMIN. `/api/admin` requires ADMIN. `/api/auth/login` and the Actuator health probes are public.
+`/api/v1/customers` and `/api/v1/interactions` require AGENT or ADMIN. `/api/v1/admin` requires ADMIN. `/api/v1/auth/login` and the Actuator health probes are public.
 
 ## Project structure
 
@@ -333,6 +394,7 @@ password hashes — they are rows in PostgreSQL, not hardcoded users.
 java-bootcamp-capstone/
 ├── backend/                 Spring Boot application and tests
 ├── frontend/                React + TypeScript application (Vite)
+├── k8s/                     Manifests, cluster ConfigMap overlay, smoke.sh, cluster-deploy.sh
 ├── scripts/                 verify-setup.mjs, the one-command setup check
 ├── docs/                    Planning documents — start with backlog.md
 ├── defense/                 Reserved for defense material
@@ -352,3 +414,5 @@ java-bootcamp-capstone/
 | `risk-register.md` | Known risks, who owns them, and what was accepted |
 | `azure-admin-runbook.md` | Operating the hosted database |
 | `azure-authentication.md` | How the Azure connection authenticates |
+| `course-cluster-deployment.md` | The course k3s deployment: record, evidence, access model, demo pre-flight |
+| `rollback-runbook.md` | Known-good digests and the rehearsed break-and-recover procedure |

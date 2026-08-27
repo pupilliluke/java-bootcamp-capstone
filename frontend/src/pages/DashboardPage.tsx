@@ -1,9 +1,14 @@
 import { useCustomers } from '../hooks/useCustomers'
+import { useRecentInteractions } from '../hooks/useRecentInteractions'
+import { useCustomerCount } from '../hooks/useCustomerCount'
 import StatusBadge from '../components/StatusBadge'
+import InteractionTimeline from '../components/InteractionTimeline'
+import PendingApprovalsNotice from '../components/PendingApprovalsNotice'
+import AdminOnly from '../auth/AdminOnly'
 import { IconUsers } from '../components/icons'
 import type { Navigate } from '../nav'
 
-// Real dashboard: every number here is derived from GET /api/customers.
+// Real dashboard: every number here is derived from GET /api/v1/customers.
 export default function DashboardPage({
   navigate,
   reloadKey,
@@ -11,10 +16,53 @@ export default function DashboardPage({
   navigate: Navigate
   reloadKey: number
 }) {
-  const { customers, loading, error } = useCustomers(reloadKey)
-  const active = customers.filter((c) => c.status === 'ACTIVE').length
-  const prospects = customers.filter((c) => c.status === 'PROSPECT').length
-  const recent = [...customers].slice(-5).reverse()
+  // Newest five, ordered by the server. This used to take the tail of the whole
+  // customer array, which only worked because the whole array was here.
+  const { customers: recent, totalElements, loading, error } = useCustomers({
+    reloadKey,
+    page: 0,
+    size: 5,
+    sort: 'createdAt',
+    direction: 'desc',
+  })
+
+  // Counts come from totals, not from counting rows. Filtering a five-row page
+  // by status would report "Active: 3" for a book of a thousand.
+  const active = useCustomerCount(['ACTIVE'], reloadKey)
+  const prospects = useCustomerCount(['PROSPECT'], reloadKey)
+
+  // The activity feed has its own deterministic customer page. Reusing the
+  // five newest customers above made the seeded Amina and Joe interactions
+  // disappear as soon as newer customers existed. Twelve matches the hook's
+  // bounded fan-out; customerId order keeps the demo customers in that window.
+  const {
+    customers: activityCustomers,
+    loading: activityCustomersLoading,
+    error: activityCustomersError,
+  } = useCustomers({
+    reloadKey,
+    page: 0,
+    size: 12,
+    sort: 'customerId',
+    direction: 'asc',
+  })
+
+  const { interactions, loading: activityLoading, error: activityError } =
+    useRecentInteractions(activityCustomers)
+
+  // Id -> name, so the feed can say who each interaction belongs to without
+  // the timeline component needing to know what a customer is.
+  const customerNames = Object.fromEntries(
+    activityCustomers.map((c) => [c.customerId, c.fullName]),
+  )
+
+  const activityBusy = activityCustomersLoading || activityLoading
+  const activityFailure = activityCustomersError || activityError
+
+  const today = new Date().toDateString()
+  const loggedToday = interactions.filter(
+    (it) => new Date(it.createdAt).toDateString() === today,
+  ).length
 
   return (
     <div>
@@ -23,15 +71,23 @@ export default function DashboardPage({
         <button className="btn-primary" onClick={() => navigate({ name: 'add' })}>Add Customer</button>
       </div>
 
+      {/* Admin-only, and gated at the mount so an AGENT never makes the request.
+          Independent of the customer fetch below -- it is about pending accounts,
+          not customers, so it shows whatever the customer list is doing. */}
+      <AdminOnly fallback={null}>
+        <PendingApprovalsNotice navigate={navigate} reloadKey={reloadKey} />
+      </AdminOnly>
+
       {loading && <div className="spinner-row">Loading…</div>}
       {error && <p className="error">{error} — is the backend running on :8080?</p>}
 
       {!loading && !error && (
         <>
           <div className="kpi-row">
-            <Tile label="Total Customers" value={customers.length} tone="blue" />
+            <Tile label="Total Customers" value={totalElements} tone="blue" />
             <Tile label="Active" value={active} tone="green" />
             <Tile label="Prospects" value={prospects} tone="blue" />
+            <Tile label="Activities logged today" value={loggedToday} tone="amber" />
           </div>
 
           <div className="card" style={{ marginTop: '1.1rem' }}>
@@ -53,13 +109,31 @@ export default function DashboardPage({
               </table>
             </div>
           </div>
+
+          <div className="card" style={{ marginTop: '1.1rem' }}>
+            <p className="section-title">Recent activity</p>
+            {activityBusy && <div className="spinner-row">Loading activity…</div>}
+            {activityFailure && <p className="error" role="alert">{activityFailure}</p>}
+            {!activityBusy && !activityFailure && interactions.length === 0 && (
+              <p className="empty">
+                No interactions recorded yet. Open a customer and use the Activities tab.
+              </p>
+            )}
+            {interactions.length > 0 && (
+              <InteractionTimeline
+                interactions={interactions}
+                customerNames={customerNames}
+                onSelect={(customerId) => navigate({ name: 'details', customerId })}
+              />
+            )}
+          </div>
         </>
       )}
     </div>
   )
 }
 
-function Tile({ label, value, tone }: { label: string; value: number; tone: 'blue' | 'green' | 'red' }) {
+function Tile({ label, value, tone }: { label: string; value: number; tone: 'blue' | 'green' | 'red' | 'amber' }) {
   return (
     <div className="kpi-tile">
       <div>

@@ -1,0 +1,27 @@
+-- Backs the status filter on GET /api/customers, which reaches the database as
+-- CustomerRepository.findByStatusIn -- "... WHERE status IN (...)".
+--
+-- A new file rather than an edit to V3__customer.sql, which is where the table
+-- and this column are created. Flyway records a checksum for every migration it
+-- has applied, so changing V3 now fails validation at startup on every database
+-- that has already run it: the local container, anyone else's laptop, and the
+-- Azure server.
+--
+-- A plain B-tree rather than a partial index on CLOSED, which is what the
+-- access pattern on its own would argue for. Two reasons, and the second is the
+-- one that decides it:
+--
+--   * status has four values and the default list asks for three of them, so
+--     that query reads most of the table and the planner is right to sequential
+--     scan it whichever index exists. ?status=CLOSED is the selective query,
+--     and the one this index actually serves.
+--   * H2 does not support partial indexes, and V3 commits in as many words to
+--     running the same file on PostgreSQL and on H2 under test. A partial index
+--     would break the test suite to optimise a query the planner already
+--     handles.
+--
+-- EXPLAIN either side of this file is recorded in the pull request. Measured
+-- against a loaded table rather than the two demo customers, because at that
+-- size PostgreSQL sequential scans everything and the comparison would show
+-- nothing either way.
+CREATE INDEX ix_customer_status ON customer (status);

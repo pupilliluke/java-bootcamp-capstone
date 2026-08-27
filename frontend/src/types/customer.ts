@@ -1,6 +1,12 @@
 // Matches the Lab 49 backend contract (CustomerResponseDTO + CustomerStatus).
 export type CustomerStatus = 'ACTIVE' | 'SUSPENDED' | 'PROSPECT' | 'CLOSED'
 
+// GET /api/v1/customers answers with every status except CLOSED when asked for no
+// status in particular. A caller that wants closed customers too — anything
+// still filtering or counting client-side — has to say so, and this is the list
+// it says it with.
+export const ALL_CUSTOMER_STATUSES: CustomerStatus[] = ['ACTIVE', 'SUSPENDED', 'PROSPECT', 'CLOSED']
+
 export interface Customer {
   customerId: string
   fullName: string
@@ -10,7 +16,7 @@ export interface Customer {
   createdAt?: string
 }
 
-// POST /api/customers body (CustomerRequestDTO). No customerId, the server
+// POST /api/v1/customers body (CustomerRequestDTO). No customerId, the server
 // assigns it and returns it on the created Customer.
 export interface CreateCustomer {
   fullName: string
@@ -18,7 +24,7 @@ export interface CreateCustomer {
   phone?: string
   status: CustomerStatus
 }
-// PUT /api/customers/{id} body (CustomerUpdateDTO)
+// PUT /api/v1/customers/{id} body (CustomerUpdateDTO)
 export interface CustomerUpdate {
   fullName: string
   email: string
@@ -28,7 +34,7 @@ export interface CustomerUpdate {
 
 export type Channel = 'PHONE' | 'EMAIL' | 'CHAT'
 
-// POST /api/interactions body (CreateInteractionRequest): customerId + channel + notes.
+// POST /api/v1/interactions body (CreateInteractionRequest): customerId + channel + notes.
 export interface CreateInteraction {
   customerId: string
   channel: Channel
@@ -51,10 +57,13 @@ export interface Contact {
   phone: string
 }
 
-export interface Activity {
-  date: string
-  type: string
-  subject: string
-  assignedTo: string
-  status: 'Completed' | 'Pending'
+// One page of results from a paged endpoint. Mirrors the backend's
+// PageResponse: the rows, plus enough about the whole result set for a pager
+// to render without a second request.
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
 }

@@ -121,8 +121,15 @@ wait_for_ingress() {
 if [ "$OWN_CLUSTER" = "1" ]; then
 
   step "1. Namespace and the test database"
-  kubectl apply -f k8s/namespace.yaml
-  kubectl apply -f k8s/test/postgres.yaml
+  # namespace.yaml declares `crm`, which is what k3d and CI use, so the normal
+  # path still exercises the real file. An overridden NS means that file is the
+  # wrong one -- applying it would create a namespace nothing else then uses.
+  if [ "$NS" = "crm" ]; then
+    kubectl apply -f k8s/namespace.yaml
+  else
+    kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+  fi
+  kubectl -n "$NS" apply -f k8s/test/postgres.yaml
   # Generous, because the first run on a cold cluster pulls ~400MB of postgres:17
   # before anything can start. Measured: 180s was not enough on a laptop k3d.
   # `k3d image import postgres:17 -c <cluster>` makes reruns instant.
@@ -139,7 +146,10 @@ if [ "$OWN_CLUSTER" = "1" ]; then
   pass "Secret created without touching a file"
 
   step "3. The real manifests"
-  kubectl apply \
+  # -n "$NS" rather than a namespace inside each file. The manifests carry no
+  # namespace, so the same four files deploy to `crm` here and to a
+  # course-cluster namespace like `studentNN` with no edit.
+  kubectl -n "$NS" apply \
     -f k8s/configmap.yaml \
     -f k8s/service.yaml \
     -f k8s/deployment.yaml \
@@ -232,18 +242,18 @@ for _ in $(seq 1 20); do
   token="$(curl -s --max-time 15 -H "Host: ${HOST_HEADER}" \
     -H 'Content-Type: application/json' \
     -d '{"username":"admin1","password":"admin1"}' \
-    "http://${INGRESS}/api/auth/login" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')" || true
+    "http://${INGRESS}/api/v1/auth/login" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')" || true
   [ -n "$token" ] && break
   sleep 3
 done
 [ -n "$token" ] || fail "login never returned a token after 20 attempts"
 pass "login issued a token"
 
-code="$(get_status /api/customers -H "Authorization: Bearer ${token}")"
+code="$(get_status /api/v1/customers -H "Authorization: Bearer ${token}")"
 [ "$code" = "200" ] || fail "authenticated read returned $code, expected 200"
 pass "authenticated read 200"
 
-code="$(get_status /api/customers)"
+code="$(get_status /api/v1/customers)"
 [ "$code" = "401" ] || fail "anonymous read returned $code, expected 401"
 pass "anonymous read refused with 401"
 
@@ -278,7 +288,7 @@ code="$(wait_for_ingress 200 /actuator/health/readiness)" ||
   fail "readiness did not recover after the rollback, last was $code"
 pass "readiness 200 after rollback"
 
-code="$(get_status /api/customers)"
+code="$(get_status /api/v1/customers)"
 [ "$code" = "401" ] || fail "anonymous read returned $code after rollback, expected 401"
 pass "authorisation still enforced after rollback"
 

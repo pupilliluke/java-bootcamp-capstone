@@ -1,6 +1,6 @@
 # ADR-002: Secrets in environment files
 
-- **Status:** Proposed | Accepted | Superseded
+- **Status:** Accepted
 - **Date:** 08-24-2026
 - **Deciders:** Luke Pupilli
 - **Related backlog:** Issue #32

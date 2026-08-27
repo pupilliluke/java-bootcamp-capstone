@@ -32,6 +32,11 @@ dist/
 *.p12
 kubeconfig
 *.kubeconfig
+# The course kubeconfig arrives named studentNN.yaml, which neither pattern
+# above catches. k8s/ is nothing but .yaml files, so a stray copy would commit
+# silently -- and this repository is public.
+student*.yaml
+*kube*.yaml
 
 # Terraform
 .terraform/
@@ -57,3 +62,6 @@ frontend/test-results/
 # stops matching the dependencies the moment anyone edits the pom.
 /reports/*
 !/reports/.gitkeep
+
+
+.claude/

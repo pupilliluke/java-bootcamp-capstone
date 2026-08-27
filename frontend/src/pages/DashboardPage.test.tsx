@@ -2,9 +2,26 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DashboardPage from './DashboardPage'
 import { useCustomers } from '../hooks/useCustomers'
+import { useRecentInteractions } from '../hooks/useRecentInteractions'
+import { useCustomerCount } from '../hooks/useCustomerCount'
 
 vi.mock('../hooks/useCustomers')
+vi.mock('../hooks/useRecentInteractions')
+vi.mock('../hooks/useCustomerCount')
 const mockUseCustomers = vi.mocked(useCustomers)
+const mockUseRecentInteractions = vi.mocked(useRecentInteractions)
+const mockUseCustomerCount = vi.mocked(useCustomerCount)
+
+// The dashboard now renders the admin-only pending-approvals notice behind
+// AdminOnly, which calls useAuth. These tests are about the customer surface,
+// so stub the context as an AGENT: AdminOnly then renders nothing and the
+// notice never fetches. PendingApprovalsNotice has its own test for the admin
+// path.
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    state: { status: 'authenticated', user: { username: 'agent1', role: 'AGENT' } },
+  }),
+}))
 
 const navigate = vi.fn()
 const renderPage = () => render(<DashboardPage navigate={navigate} reloadKey={0} />)
@@ -17,31 +34,42 @@ const customer = {
   status: 'ACTIVE' as const,
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockUseRecentInteractions.mockReturnValue({ interactions: [], loading: false, error: null })
+  mockUseCustomerCount.mockReturnValue(0)
+})
 
 describe('DashboardPage', () => {
   it('shows a loading state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: true, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: true, error: null })
     renderPage()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
 
   it('shows an error state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: 'Network error' })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: 'Network error' })
     renderPage()
     expect(screen.getByText(/is the backend running/i)).toBeInTheDocument()
   })
 
   it('shows an empty state when there are no customers', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText(/no customers yet/i)).toBeInTheDocument()
   })
 
   it('renders KPIs and recent customers when populated', () => {
-    mockUseCustomers.mockReturnValue({ customers: [customer], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [customer], totalElements: [customer].length, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText('Total Customers')).toBeInTheDocument()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()
+    expect(mockUseCustomers).toHaveBeenCalledWith({
+      reloadKey: 0,
+      page: 0,
+      size: 12,
+      sort: 'customerId',
+      direction: 'asc',
+    })
   })
 })

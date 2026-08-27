@@ -82,6 +82,12 @@ server:
   port: 8080
 
 management:
+  endpoints:
+    web:
+      exposure:
+        # health is the default; info is added for the Settings connection
+        # panel. Nothing else: every additional endpoint is surface.
+        include: health,info
   endpoint:
     health:
       # when-authorized, not always: the health endpoint is public so the
@@ -120,6 +126,23 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{correlationId}] %logger{36} - %msg%n"
 crm:
+  demo:
+    # How many customers DemoCustomerSeeder leaves the table holding, CUS-1000,
+    # CUS-1001 and CUS-1002 included. Enough rows that the list page pages, the
+    # status filter has something to filter, and an EXPLAIN over customer(status)
+    # measures something rather than three rows.
+    #
+    # A target rather than an amount to add, so restarting does not keep piling
+    # rows on. 0 turns it off, which is what to set before pointing a run at a
+    # database anyone else uses.
+    customer-count: ${CRM_DEMO_CUSTOMER_COUNT:1000}
+
+    # Four deterministic interaction rows make the dashboard and Activities
+    # timeline useful on a fresh database. Set false anywhere synthetic activity
+    # would be misleading. Direct repository inserts deliberately emit no Kafka
+    # events, and fixed IDs make restarts idempotent.
+    seed-interactions: ${CRM_DEMO_SEED_INTERACTIONS:true}
+
   messaging:
     # Defaults are the local names, so docker-compose and the test suite are
     # unaffected and nobody has to set anything to run the project.
@@ -154,3 +177,10 @@ crm:
       secret: ${JWT_SECRET}
       issuer: capstone-crm
       expiration-minutes: 60
+    google:
+      # The OAuth 2.0 Web-application client id. Unlike the JWT secret this is
+      # not a secret — it ships in the frontend bundle — so a public default is
+      # committed here to let Google Sign-In work out of the box, and GOOGLE_CLIENT_ID
+      # overrides it per environment. It is the audience every ID token is checked
+      # against, so a wrong value rejects every Google login rather than opening one.
+      client-id: ${GOOGLE_CLIENT_ID:398192114075-fb8j3jdt7m2qrqpe6957g5o57ajppfhn.apps.googleusercontent.com}

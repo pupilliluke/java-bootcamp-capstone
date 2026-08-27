@@ -47,6 +47,10 @@ export default defineConfig({
       timeout: 60_000,
       stdout: 'pipe',
       stderr: 'pipe',
+      // Keep Google Sign-In out of the e2e build: the GSI script and its network
+      // calls add nothing to the journey under test and only introduce flake.
+      // LoginPage reads this via import.meta.env.VITE_ENABLE_GSI.
+      env: { ...process.env, VITE_ENABLE_GSI: 'false' },
     },
   ],
 })

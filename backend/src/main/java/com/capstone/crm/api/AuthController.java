@@ -1,5 +1,6 @@
 package com.capstone.crm.api;
 
+import com.capstone.crm.api.dto.GoogleLoginRequest;
 import com.capstone.crm.api.dto.LoginRequestDTO;
 import com.capstone.crm.api.dto.LoginResponseDTO;
 import com.capstone.crm.api.dto.RegisterRequest;
@@ -7,6 +8,7 @@ import com.capstone.crm.api.dto.RegistrationResponse;
 import com.capstone.crm.api.dto.UserResponse;
 import com.capstone.crm.exception.InvalidCredentialsException;
 import com.capstone.crm.security.JwtService;
+import com.capstone.crm.service.GoogleAuthService;
 import com.capstone.crm.service.RegistrationService;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
@@ -31,14 +33,17 @@ public class AuthController {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final RegistrationService registrationService;
+    private final GoogleAuthService googleAuthService;
 
     public AuthController(
             JwtService jwtService,
             AuthenticationManager authenticationManager,
-            RegistrationService registrationService) {
+            RegistrationService registrationService,
+            GoogleAuthService googleAuthService) {
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
         this.registrationService = registrationService;
+        this.googleAuthService = googleAuthService;
     }
 
     /**
@@ -75,5 +80,16 @@ public class AuthController {
             log.warn("login_failed user={}", request.username());
             throw new InvalidCredentialsException("Invalid credentials");
         }
+    }
+
+    /**
+     * Google Sign-In. The browser sends the ID token it received from Google; the
+     * service verifies it and, for a known enabled account, returns the same
+     * {@link LoginResponseDTO} as the password login. A first-time sign-in
+     * provisions a disabled account and answers 403 until an admin approves it.
+     */
+    @PostMapping("/google")
+    public ResponseEntity<LoginResponseDTO> google(@Valid @RequestBody GoogleLoginRequest request) {
+        return ResponseEntity.ok(googleAuthService.authenticate(request.idToken()));
     }
 }

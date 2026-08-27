@@ -52,7 +52,20 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
-    //fixes the 403 vs 500 issue. now catches AccessDeniedException and throws 403 instead of defualt catch 500
+    // The Google credential was valid but the account is not enabled — a
+    // first-time sign-in that just provisioned a disabled account, or one still
+    // awaiting approval. 403, not 401: we know who they are, they may not in yet.
+    @ExceptionHandler(AccountPendingApprovalException.class)
+    public ResponseEntity<Map<String, Object>> handlePendingApproval(AccountPendingApprovalException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    // Needed because of the catch-all below. Spring Security's own
+    // accessDeniedHandler only sees an AccessDeniedException that reaches the
+    // filter chain; one thrown inside a controller or service is resolved here
+    // first, and without this entry it would fall through to Exception.class and
+    // be reported as a 500. That would turn "you may not do this" into "the
+    // server is broken", which is both wrong and the harder thing to debug.
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage());
@@ -71,7 +84,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * A path variable that will not convert - /api/admin/users/abc reaching a
+     * A path variable that will not convert - /api/v1/admin/users/abc reaching a
      * handler that wants a Long. Without this the catch-all below answers 500,
      * which tells an operator "we broke" when the truth is "you asked for
      * something that is not a number".
@@ -84,6 +97,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
         return build(HttpStatus.BAD_REQUEST, "Malformed request body");
+    }
+
+    /**
+     * A sort property outside the allow-list is the caller's mistake, so 400.
+     *
+     * <p>Letting it through would reach JPA as a property path and fail as a
+     * 500, which reads as a server fault for what is a bad parameter. The
+     * allowed set is named in the message: those field names appear in every
+     * customer response already, so listing them leaks nothing and saves a
+     * round of guessing.
+     */
+    @ExceptionHandler(InvalidSortException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidSort(InvalidSortException ex) {
+        return build(HttpStatus.BAD_REQUEST,
+                ex.getMessage() + ". Sortable fields: " + String.join(", ", ex.getAllowed()));
     }
 
     @ExceptionHandler(Exception.class)
