@@ -51,25 +51,25 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('CustomerListPage', () => {
   it('shows a loading state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: true, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: true, error: null })
     renderPage()
     expect(screen.getByText(/loading customers/i)).toBeInTheDocument()
   })
 
   it('shows an error state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: 'Network error' })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: 'Network error' })
     renderPage()
     expect(screen.getByRole('alert')).toHaveTextContent(/network error/i)
   })
 
   it('shows an empty state when there are no customers', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText(/no customers match your search/i)).toBeInTheDocument()
   })
 
   it('renders customer rows when populated', () => {
-    mockUseCustomers.mockReturnValue({ customers: [customer], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [customer], totalElements: [customer].length, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()
     expect(screen.getByText('CUS-1001')).toBeInTheDocument()
@@ -78,7 +78,7 @@ describe('CustomerListPage', () => {
   // --- multi-status checkbox filter --------------------------------------
   describe('status filter', () => {
     beforeEach(() => {
-      mockUseCustomers.mockReturnValue({ customers: roster, loading: false, error: null })
+      mockUseCustomers.mockReturnValue({ customers: roster, totalElements: roster.length, totalPages: 1, loading: false, error: null })
     })
 
     it('shows every status by default, with "All" checked', () => {
@@ -87,72 +87,80 @@ describe('CustomerListPage', () => {
       expect(rows()).toBe(4)
     })
 
-    it('narrows to a single checked status', async () => {
+    // Filtering moved to the server, so these assert the request the page makes
+    // rather than the rows it keeps. Asserting on rows here would pass whatever
+    // the mock returned and prove nothing about the filter.
+    const lastCall = () => mockUseCustomers.mock.calls[mockUseCustomers.mock.calls.length - 1][0]
+
+    it('asks the server for a single checked status', async () => {
       const user = userEvent.setup()
       renderPage()
       await user.click(statusBox(/^active$/i))
 
-      expect(screen.getByText('Active Andy')).toBeInTheDocument()
-      expect(screen.queryByText('Prospect Pia')).not.toBeInTheDocument()
-      expect(rows()).toBe(1)
+      expect(lastCall()?.statuses).toEqual(['ACTIVE'])
       // Selecting a specific status clears the "All" checkbox.
       expect(statusBox(/^all$/i)).not.toBeChecked()
     })
 
-    it('shows the union of several checked statuses', async () => {
+    it('asks for the union of several checked statuses', async () => {
       const user = userEvent.setup()
       renderPage()
       await user.click(statusBox(/^active$/i))
       await user.click(statusBox(/^closed$/i))
 
-      expect(screen.getByText('Active Andy')).toBeInTheDocument()
-      expect(screen.getByText('Closed Chris')).toBeInTheDocument()
-      expect(screen.queryByText('Prospect Pia')).not.toBeInTheDocument()
-      expect(rows()).toBe(2)
+      expect(lastCall()?.statuses).toEqual(expect.arrayContaining(['ACTIVE', 'CLOSED']))
+      expect(lastCall()?.statuses).toHaveLength(2)
     })
 
-    it('falls back to All when the last status is unchecked', async () => {
+    it('falls back to every status when the last one is unchecked', async () => {
       const user = userEvent.setup()
       renderPage()
-      await user.click(statusBox(/^active$/i)) // narrow to 1
-      expect(rows()).toBe(1)
-      await user.click(statusBox(/^active$/i)) // uncheck it again
-
-      expect(statusBox(/^all$/i)).toBeChecked()
-      expect(rows()).toBe(4)
-    })
-
-    // Without the setPage(1) calls in showAll/toggle, this strands the user on
-    // a page the filtered list no longer has, and the table renders empty.
-    it('returns to page 1 when the filter changes', async () => {
-      mockUseCustomers.mockReturnValue({ customers: bigRoster, loading: false, error: null })
-      const user = userEvent.setup()
-      renderPage()
-
-      await user.click(screen.getByRole('button', { name: '2' }))
-      expect(screen.getByText('Closed Chris')).toBeInTheDocument() // 11th row, page 2
-
+      await user.click(statusBox(/^active$/i))
       await user.click(statusBox(/^active$/i))
 
-      expect(screen.getByRole('button', { name: '1' })).toHaveClass('active')
-      expect(screen.getByText('Active Number 0')).toBeInTheDocument()
-      expect(rows()).toBe(8)
+      expect(statusBox(/^all$/i)).toBeChecked()
+      expect(lastCall()?.statuses).toHaveLength(4)
     })
 
-    // The pager and the table must agree about which page is showing, even when
-    // the list shrinks underneath the current page without a filter change.
-    it('keeps the table and the pager on the same page when the list shrinks', async () => {
-      mockUseCustomers.mockReturnValue({ customers: bigRoster, loading: false, error: null })
+    // Without the setPage(1) calls in showAll/toggle, the page stays on nine
+    // while the filtered result has one, and the server answers with nothing.
+    it('returns to the first page when the filter changes', async () => {
+      mockUseCustomers.mockReturnValue({
+        customers: bigRoster.slice(0, 8),
+        totalElements: 96,
+        totalPages: 12,
+        loading: false,
+        error: null,
+      })
       const user = userEvent.setup()
-      const { rerender } = renderPage()
+      renderPage()
 
       await user.click(screen.getByRole('button', { name: '2' }))
-      expect(rows()).toBe(3)
+      expect(lastCall()?.page).toBe(1) // zero-based: screen page 2
 
-      // A refetch returns a shorter list — one page's worth — while the user is
-      // still on page 2.
+      await user.click(statusBox(/^active$/i))
+      expect(lastCall()?.page).toBe(0)
+      expect(screen.getByRole('button', { name: '1' })).toHaveClass('active')
+    })
+
+    // The pager and the table must agree, even when the book shrinks underneath
+    // the current page.
+    it('snaps back when the current page no longer exists', async () => {
+      mockUseCustomers.mockReturnValue({
+        customers: bigRoster.slice(0, 8),
+        totalElements: 96,
+        totalPages: 12,
+        loading: false,
+        error: null,
+      })
+      const user = userEvent.setup()
+      const { rerender } = renderPage()
+      await user.click(screen.getByRole('button', { name: '3' }))
+
       mockUseCustomers.mockReturnValue({
         customers: bigRoster.slice(0, 3),
+        totalElements: 3,
+        totalPages: 1,
         loading: false,
         error: null,
       })
