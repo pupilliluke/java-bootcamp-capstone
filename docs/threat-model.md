@@ -41,7 +41,7 @@ The application makes **no CORS configuration**, and that is the finished state,
 | Environment | `/api` forwarded by | Browser's origin |
 | ----------- | ------------------- | ---------------- |
 | `npm run dev` | Vite dev proxy (`vite.config.ts`) | `localhost:5173` |
-| Vercel (deployed UI) | `vercel.json` edge rewrite (`frontend/vercel.json`) | the `*.vercel.app` domain |
+| Vercel (deployed UI) | `vercel.json` edge rewrite (`frontend/vercel.json`) | `https://www.neuralcrm.xyz` (canonical; `*.vercel.app` previews behave identically) |
 | One-host k8s (alternative) | Traefik routing `/api` → `crm-api` on one ingress host | the ingress host |
 
 So the request the browser makes is always same-origin; the hop to the API is a server-side proxy the browser never sees. The security value is that there is nothing to get wrong: no origin allowlist that could be widened to `*` by a well-meaning edit, no preflight surface. A cross-origin caller is refused by the browser's own same-origin policy, which is the strongest possible answer because it needs no server cooperation.

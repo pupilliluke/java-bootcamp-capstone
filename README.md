@@ -4,6 +4,9 @@ A customer relationship management application: a React front end, a Spring Boot
 REST API with JWT authentication, Kafka messaging for customer interactions, and
 PostgreSQL for accounts.
 
+The hosted UI lives at **<https://www.neuralcrm.xyz>** (Vercel, edge-proxying
+`/api` to the deployed backend — see `frontend/README.md`).
+
 ## Project status
 
 | Area | Current contents |
