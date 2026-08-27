@@ -1,7 +1,7 @@
-# ADR-005: H2 for the fast suite with one real-PostgreSQL test
+# ADR-007: H2 for the fast suite with one real-PostgreSQL test
 
-- **Status:** Proposed | Accepted | Superseded
-- **Date:** 08-25-2026
+- **Status:** Accepted
+- **Date:** 08-25-2026 (renumbered from ADR-005 on 2026-08-27 — the number collided with the deploy record; the decision is unchanged)
 - **Deciders:** Chase Bulkin
 - **Related backlog:** Issue #32
 

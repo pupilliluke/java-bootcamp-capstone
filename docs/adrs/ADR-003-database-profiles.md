@@ -1,6 +1,6 @@
 # ADR-003: Spring profiles for local vs Azure
 
-- **Status:** Proposed | Accepted | Superseded
+- **Status:** Accepted
 - **Date:** 08-24-2026
 - **Deciders:** Luke Pupilli
 - **Related backlog:** Issue #32

@@ -78,9 +78,6 @@ jobs:
       - name: Verify
         run: ./mvnw -B -ntp clean verify
 
-      # TODO: the Dependency-Check gate belongs here, as its own issue.
-      # See notes/Week 5/Module 40/lab40-dependency-check-plan.md.
-
       # if: always() so a failing build still uploads the reports that explain
       # why. Without it the one run you actually need to read has no evidence.
       - name: Upload test reports
@@ -91,37 +88,6 @@ jobs:
           path: |
             backend/target/surefire-reports/**
             backend/target/failsafe-reports/**
-
-      # Answers a different question from the trivy scan in the image job. Trivy
-      # looks at the built container; this looks at the dependency tree Maven
-      # resolves, so it sees things that never reach an image layer and it runs
-      # without waiting for a build.
-      #
-      # Pull requests included, deliberately. The finding set moves when the world
-      # moves rather than when the diff does, which is an argument for running it
-      # often rather than an argument for running it late: a CVE published on
-      # Tuesday should not first appear on a merge to main.
-      #
-      # continue-on-error is deliberately NOT set. A High or worse finding stops
-      # the build. Without that this is a report, and the rubric's Exemplary
-      # descriptor asks for a gate.
-      - name: Dependency-Check
-        env:
-          # Unset is survivable - the plugin falls back to unauthenticated NVD
-          # access, which is rate-limited but works. Add the secret to make it
-          # usable rather than merely possible.
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        # The threshold and the suppressions live in the POM and in
-        # backend/dependency-check-suppressions.xml, so this command behaves the
-        # same on a laptop as it does here.
-        run: ./mvnw -B -ntp -Psecurity-scan dependency-check:check
-
-      - name: Upload the vulnerability report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: reports/**
 
   frontend:
     name: frontend
@@ -235,30 +201,35 @@ jobs:
           ./container-structure-test test \
             --image crm-api:test --config backend/container-structure-test.yaml
 
-      # REPORT-ONLY FOR NOW (exit-code 0). Read this before changing it.
-      #
-      # The image currently carries 8 critical and 41 high findings, nearly all
-      # of them from the application's own dependencies rather than the base
-      # image: tomcat-embed-core 10.1.31 alone accounts for 5 critical and 14
-      # high, and spring-security-web 6.3.4 for another critical. They have
-      # fixes available, so ignore-unfixed does not filter them out.
-      #
-      # Set exit-code to 1 and this job fails on every pull request from the
-      # moment it merges, for everyone, over problems no individual pull request
-      # introduced. A gate that is red on the day it lands is a gate the team
-      # learns to ignore, so it starts as a report and becomes a gate once the
-      # findings are dealt with.
-      #
-      # The fix is one line: the spring-boot-starter-parent version in
-      # backend/pom.xml is 3.3.5, from October 2024. Bumping it pulls patched
-      # Tomcat and Spring Security in transitively. Do that first, confirm this
-      # step reports clean, then change exit-code to "1" and delete this comment.
+      # exit-code 1, so this gates rather than reports. It landed green on
+      # purpose: a gate that is red on the day it arrives is a gate the team
+      # learns to ignore, so the findings were dealt with first -- the
+      # spring-boot-parent bump to 3.5.16 cleared the dependency CVEs, and what
+      # remains is accepted by id in .trivyignore.yaml with an owner and an
+      # expiry.
       #
       # Locally, `docker scout quickview crm-api:test` answers the same question
       # in seconds and needs no database download, which on a home connection is
       # the difference between a usable check and a forty-minute one. Trivy runs
       # here because the action caches its database between runs and because it
       # also sweeps for committed secrets.
+      #
+      # It replaces the Dependency-Check step that used to sit in the backend
+      # job, and it is a straight upgrade rather than a retreat: the image carries the Spring Boot
+      # fat jar, so BOOT-INF/lib is scanned here and every dependency that
+      # actually ships is covered. Trivy matches on package coordinates instead
+      # of CPE strings, which is why it does not reproduce the three CPE
+      # false positives Dependency-Check needed suppressing - and why it caught
+      # CVE-2026-54291 in pgjdbc, which Dependency-Check scored 5.9 and let
+      # straight through its 7.0 threshold.
+      #
+      # What is given up is the pre-build scan: this job needs backend and
+      # frontend first, so a bad dependency surfaces after a build rather than in
+      # the first minute. That is the price of not maintaining a 189MB NVD
+      # database that no key was available for.
+      #
+      # ignore-unfixed stays on. A finding we cannot act on is a finding that
+      # would teach people to ignore this step.
       - name: Vulnerability and secret scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -266,7 +237,8 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "0"
+          trivyignores: .trivyignore.yaml
+          exit-code: "1"
 
       # Last, because it is the slowest: starts the real image against a real
       # PostgreSQL and talks to it over HTTP. Testcontainers brings its own
@@ -559,6 +531,12 @@ jobs:
       # CI-only value—not a deployed or shared secret.
       JWT_SECRET: ci-e2e-secret-that-is-at-least-32-bytes-long
 
+      # Do not load Google Sign-In during the e2e run. The Vite dev server that
+      # playwright.config.ts starts reads this, so the GSI script and widget are
+      # never included and cannot flake the journey. (playwright.config.ts also
+      # sets it on the dev-server command; this makes the intent visible in CI.)
+      VITE_ENABLE_GSI: "false"
+
     defaults:
       run:
         working-directory: frontend
@@ -640,7 +618,9 @@ jobs:
             backend/target/SHA256SUMS
 
   # Pushes the image to GHCR -- the course's named registry -- so the Deployment
-  # can pin a digest instead of a mutable tag (ADR-005's open follow-up).
+  # can pin a digest instead of a mutable tag. That follow-up from ADR-005 has
+  # since landed: k8s/deployment.yaml pins the digest this job printed for the
+  # build it runs (see the ADR's amendment and docs/rollback-runbook.md).
   #
   # Only on push to develop/main, like package: a pull request's image is a
   # candidate, and candidates do not get published. Two tags per build: the
