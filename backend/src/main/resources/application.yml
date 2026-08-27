@@ -82,6 +82,12 @@ server:
   port: 8080
 
 management:
+  endpoints:
+    web:
+      exposure:
+        # health is the default; info is added for the Settings connection
+        # panel. Nothing else: every additional endpoint is surface.
+        include: health,info
   endpoint:
     health:
       # when-authorized, not always: the health endpoint is public so the
