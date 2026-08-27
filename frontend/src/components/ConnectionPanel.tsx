@@ -95,13 +95,18 @@ export default function ConnectionPanel() {
   const backendIdentity = [
     build?.version && `v${build.version}`,
     info?.revision && info.revision.slice(0, 12),
-    connections?.profile && `profile: ${connections.profile}`,
+    // The environment name when the deployment sets one; the profile is the
+    // fallback and is honest on a laptop, misleading on a cluster reusing the
+    // local configuration shape -- which is exactly why deployments name
+    // themselves (CRM_ENVIRONMENT in the ConfigMaps).
+    connections?.environment ?? (connections?.profile && `profile: ${connections.profile}`),
   ]
     .filter(Boolean)
     .join(' · ')
 
   const dbIdentity = [
     connections?.database,
+    connections?.schema && `schema ${connections.schema}`,
     ...DB_DETAIL_KEYS.map((k) => db?.details?.[k]).filter(Boolean),
   ]
     .filter(Boolean)

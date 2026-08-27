@@ -8,7 +8,12 @@ import { http } from './http'
 // degrade to "not reported" rather than break.
 export interface ConnectionsInfo {
   profile?: string
+  // The deployment's human name (course-cluster, k3d-local); absent on a
+  // laptop, where the profile is the honest answer.
+  environment?: string
   database?: string
+  // currentSchema on a shared database -- whose rows these are.
+  schema?: string
   kafka?: {
     bootstrap?: string
     topic?: string

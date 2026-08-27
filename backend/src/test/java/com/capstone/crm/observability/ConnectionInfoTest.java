@@ -60,6 +60,18 @@ class ConnectionInfoTest {
     }
 
     @Test
+    void schemaParameterIsExtractedWhenPresent() {
+        assertThat(ConnectionInfoContributor.schemaParameter(
+                "jdbc:postgresql://host:5432/bootcamp?currentSchema=student02"))
+                .isEqualTo("student02");
+        assertThat(ConnectionInfoContributor.schemaParameter(
+                "jdbc:postgresql://host:5432/crm?sslmode=require&currentSchema=s04"))
+                .isEqualTo("s04");
+        assertThat(ConnectionInfoContributor.schemaParameter(
+                "jdbc:postgresql://host:5432/crm")).isNull();
+    }
+
+    @Test
     void jdbcUrlsAreSanitizedToTheirTarget() {
         assertThat(ConnectionInfoContributor.sanitizeJdbcUrl(
                 "jdbc:postgresql://db.example.com:5432/crm?sslmode=require&currentSchema=student02"))

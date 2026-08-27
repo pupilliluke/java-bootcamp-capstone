@@ -31,7 +31,9 @@ const HEALTHY = {
 const INFO = {
   connections: {
     profile: 'local',
+    environment: 'course-cluster',
     database: 'postgresql://localhost:5432/crm',
+    schema: 'student02',
     kafka: {
       bootstrap: 'localhost:9092',
       topic: 'crm.interaction.v1',
@@ -145,10 +147,23 @@ describe('ConnectionPanel', () => {
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
     expect(within(row('Backend')).getByText(/v0\.0\.1-SNAPSHOT/)).toBeInTheDocument()
     expect(within(row('Backend')).getByText(/ab0faa7deadb/)).toBeInTheDocument()
-    expect(within(row('Backend')).getByText(/profile: local/)).toBeInTheDocument()
+    // The environment name wins over the profile: "local" on a cluster pod is
+    // true about the config shape and wrong about the place.
+    expect(within(row('Backend')).getByText(/course-cluster/)).toBeInTheDocument()
+    expect(within(row('Backend')).queryByText(/profile: local/)).not.toBeInTheDocument()
     expect(within(row('Database')).getByText(/postgresql:\/\/localhost:5432\/crm/)).toBeInTheDocument()
+    expect(within(row('Database')).getByText(/schema student02/)).toBeInTheDocument()
     expect(within(row('Kafka')).getByText(/crm\.interaction\.v1/)).toBeInTheDocument()
     expect(within(row('Kafka')).getByText(/crm-interaction-service-v1/)).toBeInTheDocument()
+  })
+
+  it('falls back to the profile when no environment name is set', async () => {
+    vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
+    vi.mocked(infoApi.get).mockResolvedValue({ connections: { profile: 'local' } })
+    render(<ConnectionPanel />)
+
+    await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
+    expect(within(row('Backend')).getByText(/profile: local/)).toBeInTheDocument()
   })
 
   // An older backend without the contributor answers info with nothing, or the

@@ -56,7 +56,26 @@ public class ConnectionInfoContributor implements InfoContributor {
                 : environment.getDefaultProfiles();
         connections.put("profile", String.join(",", profiles));
 
+        // The profile names the *shape* of the configuration, and the course
+        // cluster deliberately reuses the local shape with every value
+        // overridden -- so "local" on a pod in student02 is true and useless.
+        // CRM_ENVIRONMENT is the human name for where this instance runs,
+        // set per deployment (k8s/configmap.yaml, k8s/cluster/configmap.yaml)
+        // and absent on a laptop, where the profile really does say it all.
+        String environmentName = environment.getProperty("CRM_ENVIRONMENT");
+        if (environmentName != null && !environmentName.isBlank()) {
+            connections.put("environment", environmentName);
+        }
+
         connections.put("database", sanitizeJdbcUrl(datasourceUrl));
+
+        // On a shared database the schema is the identity that matters most:
+        // bootcamp holds every student's rows, currentSchema says whose these
+        // are. The sanitizer cuts parameters, so it is surfaced separately.
+        String schema = schemaParameter(datasourceUrl);
+        if (schema != null) {
+            connections.put("schema", schema);
+        }
 
         Map<String, Object> kafka = new LinkedHashMap<>();
         kafka.put("bootstrap", kafkaBootstrap);
@@ -73,6 +92,16 @@ public class ConnectionInfoContributor implements InfoContributor {
         if (gitSha != null && !gitSha.isBlank() && !"unknown".equals(gitSha)) {
             builder.withDetail("revision", gitSha);
         }
+    }
+
+    /** The currentSchema query parameter, if the URL carries one. */
+    static String schemaParameter(String url) {
+        if (url == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("[?&;]currentSchema=([^&;]+)").matcher(url);
+        return m.find() ? m.group(1) : null;
     }
 
     /**
