@@ -13,13 +13,26 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 public class CustomerService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
+
+    // What GET /api/customers answers with when the caller names no status.
+    //
+    // complementOf rather than an explicit EnumSet.of(ACTIVE, SUSPENDED,
+    // PROSPECT): a status added to CustomerStatus later then joins the default
+    // list on its own. Spelled out, a new status would be missing from every
+    // list page until somebody remembered this constant existed -- and the
+    // symptom of that is customers silently absent, which is the hardest kind
+    // of bug to notice.
+    private static final Set<CustomerStatus> DEFAULT_STATUSES =
+            EnumSet.complementOf(EnumSet.of(CustomerStatus.CLOSED));
 
     private final CustomerRepository customerRepository;
 
@@ -49,8 +62,19 @@ public class CustomerService {
         return CustomerMapper.toResponse(customer);
     }
 
-    public List<CustomerResponseDTO> list() {
-        return customerRepository.findAll().stream()
+    /**
+     * Naming no status means every status except CLOSED, which is what the list
+     * is for day to day. This filters the list, it does not hide the record: a
+     * closed customer is still reachable by asking for it explicitly
+     * (?status=CLOSED) and by id through {@link #get(String)}.
+     *
+     * The filter is applied by the database rather than by discarding rows
+     * here, so the query returns what was asked for instead of everything.
+     */
+    public List<CustomerResponseDTO> list(Set<CustomerStatus> statuses) {
+        Set<CustomerStatus> effective =
+                (statuses == null || statuses.isEmpty()) ? DEFAULT_STATUSES : statuses;
+        return customerRepository.findByStatusIn(effective).stream()
                 .map(CustomerMapper::toResponse)
                 .collect(Collectors.toList());
     }
