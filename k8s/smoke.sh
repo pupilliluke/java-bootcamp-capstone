@@ -8,13 +8,56 @@
 # and on a runner, or the CI result and the rehearsal in
 # docs/rollback-runbook.md are evidence about two different things.
 #
+# It runs in two modes, because it is used against two different kinds of
+# cluster and only one of them is ours to set up.
+#
+# OWN_CLUSTER=1 (default) -- a k3d cluster on a laptop, or the throwaway one CI
+# creates. The script owns it: it creates the namespace, stands up a test
+# PostgreSQL, creates the Secret and applies the manifests, then checks all six
+# steps. Nothing about this path changes.
+#
+# OWN_CLUSTER=0 -- the shared course cluster, where we have admin rights inside
+# one namespace and nothing outside it. Setup is not ours to do and would be
+# destructive if attempted, so steps 1 to 3 are skipped and the script checks
+# what is already deployed. It prints which ones it skipped and why on the way
+# past, so a run is self-explaining rather than quietly doing less.
+#
 #   ./k8s/smoke.sh                        # against the current kubectl context
 #   INGRESS=localhost:8088 ./k8s/smoke.sh
+#
+#   OWN_CLUSTER=0 NS=studentNN INGRESS=<host>:80 \
+#     HOST_HEADER=<routable-host> ./k8s/smoke.sh
 #
 # Every assertion fails the script. There is no path through this that reports
 # success without having checked something -- which is the failure mode the
 # manifests job had before its file-count guard, and worth not repeating.
 set -euo pipefail
+
+# Default 1 so every existing invocation -- a laptop, and `bash k8s/smoke.sh` in
+# ci.yml -- behaves exactly as it did.
+OWN_CLUSTER="${OWN_CLUSTER:-1}"
+
+# Checked before the defaults below are applied, because on a shared cluster
+# every one of those defaults is wrong in a way that is worse than an error.
+# NS=crm is somebody else's namespace or none at all; localhost:8088 is a k3d
+# port mapping that does not exist. Failing here with a usage message beats
+# forty polls against a port nothing is listening on, and beats a `kubectl set
+# image` aimed at a namespace we did not mean.
+if [ "$OWN_CLUSTER" != "1" ]; then
+  : "${NS:?OWN_CLUSTER=0 needs NS set to your own namespace, e.g. NS=studentNN}"
+  : "${INGRESS:?OWN_CLUSTER=0 needs INGRESS set, e.g. INGRESS=<cluster-host>:80}"
+  : "${HOST_HEADER:?OWN_CLUSTER=0 needs HOST_HEADER set to the host Traefik routes on}"
+
+  # IMAGE only takes effect in the step 3 that this mode skips. Silently
+  # ignoring it would be the same class of bug as the `kubectl set image` this
+  # variable was introduced to remove: a run that looks like it tested one thing
+  # and tested another.
+  if [ -n "${IMAGE:-}" ]; then
+    echo "IMAGE has no effect when OWN_CLUSTER=0 -- this mode checks what is" >&2
+    echo "already deployed rather than deploying. Deploy it, then run again." >&2
+    exit 1
+  fi
+fi
 
 NS="${NS:-crm}"
 # Empty by default, meaning "whatever deployment.yaml declares". Set it only to
@@ -75,44 +118,111 @@ wait_for_ingress() {
   return 1
 }
 
-step "1. Namespace and the test database"
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/test/postgres.yaml
-# Generous, because the first run on a cold cluster pulls ~400MB of postgres:17
-# before anything can start. Measured: 180s was not enough on a laptop k3d.
-# `k3d image import postgres:17 -c <cluster>` makes reruns instant.
-kubectl -n "$NS" rollout status deploy/postgres --timeout=420s
-pass "PostgreSQL is up"
+if [ "$OWN_CLUSTER" = "1" ]; then
 
-step "2. Secret, created out of band"
-# Never `kubectl apply -f secret.example.yaml`. That file records which keys are
-# needed; applying it would deploy its placeholders.
-kubectl -n "$NS" create secret generic crm-api-secrets \
-  --from-literal=LOCAL_DB_PASSWORD='smoke-test-only' \
-  --from-literal=JWT_SECRET='smoke-test-secret-of-at-least-32-characters' \
-  --dry-run=client -o yaml | kubectl apply -f -
-pass "Secret created without touching a file"
+  step "1. Namespace and the test database"
+  # namespace.yaml declares `crm`, which is what k3d and CI use, so the normal
+  # path still exercises the real file. An overridden NS means that file is the
+  # wrong one -- applying it would create a namespace nothing else then uses.
+  if [ "$NS" = "crm" ]; then
+    kubectl apply -f k8s/namespace.yaml
+  else
+    kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
+  fi
+  kubectl -n "$NS" apply -f k8s/test/postgres.yaml
+  # Generous, because the first run on a cold cluster pulls ~400MB of postgres:17
+  # before anything can start. Measured: 180s was not enough on a laptop k3d.
+  # `k3d image import postgres:17 -c <cluster>` makes reruns instant.
+  kubectl -n "$NS" rollout status deploy/postgres --timeout=420s
+  pass "PostgreSQL is up"
 
-step "3. The real manifests"
-kubectl apply \
-  -f k8s/configmap.yaml \
-  -f k8s/service.yaml \
-  -f k8s/deployment.yaml \
-  -f k8s/ingress.yaml
+  step "2. Secret, created out of band"
+  # Never `kubectl apply -f secret.example.yaml`. That file records which keys are
+  # needed; applying it would deploy its placeholders.
+  kubectl -n "$NS" create secret generic crm-api-secrets \
+    --from-literal=LOCAL_DB_PASSWORD='smoke-test-only' \
+    --from-literal=JWT_SECRET='smoke-test-secret-of-at-least-32-characters' \
+    --dry-run=client -o yaml | kubectl apply -f -
+  pass "Secret created without touching a file"
 
-# The one deviation from a real deploy, and it is deliberate. The ConfigMap
-# points at host.k3d.internal because that is where PostgreSQL lives on a
-# developer laptop. In CI there is no such host, so the value is repointed at the
-# in-cluster Service. Everything else -- probes, security context, resources, the
-# Secret wiring -- is exactly what ships.
-kubectl -n "$NS" patch configmap crm-api-config --type merge \
-  -p '{"data":{"LOCAL_DB_HOST":"postgres","LOCAL_DB_PORT":"5432"}}'
-if [ -n "$IMAGE" ]; then
-  kubectl -n "$NS" set image deploy/crm-api "crm-api=${IMAGE}"
+  step "3. The real manifests"
+  # -n "$NS" rather than a namespace inside each file. The manifests carry no
+  # namespace, so the same four files deploy to `crm` here and to a
+  # course-cluster namespace like `studentNN` with no edit.
+  kubectl -n "$NS" apply \
+    -f k8s/configmap.yaml \
+    -f k8s/service.yaml \
+    -f k8s/deployment.yaml \
+    -f k8s/ingress.yaml
+
+  # The one deviation from a real deploy, and it is deliberate. The ConfigMap
+  # points at host.k3d.internal because that is where PostgreSQL lives on a
+  # developer laptop. In CI there is no such host, so the value is repointed at the
+  # in-cluster Service. Everything else -- probes, security context, resources, the
+  # Secret wiring -- is exactly what ships.
+  kubectl -n "$NS" patch configmap crm-api-config --type merge \
+    -p '{"data":{"LOCAL_DB_HOST":"postgres","LOCAL_DB_PORT":"5432"}}'
+  if [ -n "$IMAGE" ]; then
+    kubectl -n "$NS" set image deploy/crm-api "crm-api=${IMAGE}"
+  fi
+  kubectl -n "$NS" rollout restart deploy/crm-api
+  kubectl -n "$NS" rollout status deploy/crm-api --timeout="$ROLLOUT_TIMEOUT"
+
+  # rollout status answers "is the new pod Ready", which is not the same
+  # question as "is the old one gone" -- and between those two facts the Service
+  # lists both.
+  #
+  # The ConfigMap patch above is what makes that window unavoidable. envFrom is
+  # read only at container start, so the patch needs a restart, and that restart
+  # overlaps the rollout `kubectl apply` has already begun. Both ReplicaSets
+  # scale up inside the same second and both pods pass readiness, so Traefik
+  # briefly holds two endpoints -- one of which Kubernetes is about to kill.
+  #
+  # A request routed to the terminating pod comes back 502. That is what failed
+  # the anonymous read on runs 33006630567 and 33007421293, having passed
+  # readiness, login and the authenticated read moments earlier: those three
+  # poll, and the last two assertions are single-shot.
+  #
+  # Waiting for the count to settle fixes the cause. Teaching each assertion to
+  # retry a 502 would only hide it, and would blind the checks in steps 5 and 6
+  # to a 502 that is real.
+  settled=""
+  for _ in $(seq 1 40); do
+    if [ "$(kubectl -n "$NS" get pods -l app=crm-api --no-headers 2>/dev/null | wc -l | tr -d ' ')" = "1" ]; then
+      settled="yes"
+      break
+    fi
+    sleep 3
+  done
+  # Not a failure: a future replicas > 1 would legitimately never reach one pod.
+  # Silence would be worse than either -- the run should say which it got.
+  if [ -n "$settled" ]; then
+    pass "Deployment rolled out, one pod serving"
+  else
+    pass "Deployment rolled out (more than one pod still present after 120s)"
+    kubectl -n "$NS" get pods -l app=crm-api --no-headers | sed 's/^/     /'
+  fi
+
+else
+  # Every line of steps 1 to 3 assumes this script owns the cluster. On the
+  # course cluster all of it is either forbidden or actively destructive, and
+  # the destructive ones are the dangerous half: they succeed.
+  step "1-3. Setup skipped, because this cluster is not ours to set up"
+  echo "     namespace   provided, and we have no rights to create one"
+  echo "     PostgreSQL  provided, and k8s/test/postgres.yaml is a throwaway fixture"
+  echo "     Secret      left alone -- ours carries a smoke-test password, and"
+  echo "                 applying it would overwrite the real credential and"
+  echo "                 take down a working deployment"
+  echo "     ConfigMap   left alone -- the patch repoints the database at an"
+  echo "                 in-cluster postgres Service that does not exist here"
+
+  # Steps 5 and 6 break a running deployment and then restore it, so this is
+  # not a formality. Establishing that it was healthy beforehand is the whole
+  # difference between proving the rollback worked and discovering it was
+  # already broken when we arrived.
+  kubectl -n "$NS" rollout status deploy/crm-api --timeout="$ROLLOUT_TIMEOUT"
+  pass "crm-api was already deployed and healthy in namespace $NS"
 fi
-kubectl -n "$NS" rollout restart deploy/crm-api
-kubectl -n "$NS" rollout status deploy/crm-api --timeout="$ROLLOUT_TIMEOUT"
-pass "Deployment rolled out"
 
 step "4. The application serves through the ingress"
 code="$(wait_for_ingress 200 /actuator/health/readiness)" ||

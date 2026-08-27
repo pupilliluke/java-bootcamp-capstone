@@ -78,9 +78,6 @@ jobs:
       - name: Verify
         run: ./mvnw -B -ntp clean verify
 
-      # TODO: the Dependency-Check gate belongs here, as its own issue.
-      # See notes/Week 5/Module 40/lab40-dependency-check-plan.md.
-
       # if: always() so a failing build still uploads the reports that explain
       # why. Without it the one run you actually need to read has no evidence.
       - name: Upload test reports
@@ -228,6 +225,24 @@ jobs:
       # the difference between a usable check and a forty-minute one. Trivy runs
       # here because the action caches its database between runs and because it
       # also sweeps for committed secrets.
+      #
+      # exit-code 1, so this gates rather than reports. It replaces the
+      # Dependency-Check step that used to sit in the backend job, and it is a
+      # straight upgrade rather than a retreat: the image carries the Spring Boot
+      # fat jar, so BOOT-INF/lib is scanned here and every dependency that
+      # actually ships is covered. Trivy matches on package coordinates instead
+      # of CPE strings, which is why it does not reproduce the three CPE
+      # false positives Dependency-Check needed suppressing - and why it caught
+      # CVE-2026-54291 in pgjdbc, which Dependency-Check scored 5.9 and let
+      # straight through its 7.0 threshold.
+      #
+      # What is given up is the pre-build scan: this job needs backend and
+      # frontend first, so a bad dependency surfaces after a build rather than in
+      # the first minute. That is the price of not maintaining a 189MB NVD
+      # database that no key was available for.
+      #
+      # ignore-unfixed stays on. A finding we cannot act on is a finding that
+      # would teach people to ignore this step.
       - name: Vulnerability and secret scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -235,7 +250,8 @@ jobs:
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "0"
+          trivyignores: .trivyignore.yaml
+          exit-code: "1"
 
       # Last, because it is the slowest: starts the real image against a real
       # PostgreSQL and talks to it over HTTP. Testcontainers brings its own
@@ -490,8 +506,12 @@ jobs:
       # Windows, where git does not reliably carry the executable bit, and a
       # missing +x would fail this job with "permission denied" for a reason that
       # has nothing to do with the manifests.
+      # IMAGE=crm-api:dev overrides the manifest's image, which smoke.sh
+      # supports for exactly this: once the manifest pins a published digest,
+      # the pinned ref is the *released* build, and a pull request must test its
+      # own candidate image, not re-test the release.
       - name: Deploy, smoke, break, recover
-        run: bash k8s/smoke.sh
+        run: IMAGE=crm-api:dev bash k8s/smoke.sh
 
       # Only on failure, and worth the noise then: a red cluster job with no
       # cluster left to inspect is nearly impossible to diagnose from a runner
@@ -552,6 +572,12 @@ jobs:
 
       # CI-only value—not a deployed or shared secret.
       JWT_SECRET: ci-e2e-secret-that-is-at-least-32-bytes-long
+
+      # Do not load Google Sign-In during the e2e run. The Vite dev server that
+      # playwright.config.ts starts reads this, so the GSI script and widget are
+      # never included and cannot flake the journey. (playwright.config.ts also
+      # sets it on the dev-server command; this makes the intent visible in CI.)
+      VITE_ENABLE_GSI: "false"
 
     defaults:
       run:
@@ -632,3 +658,67 @@ jobs:
           path: |
             backend/target/*.jar
             backend/target/SHA256SUMS
+
+  # Pushes the image to GHCR -- the course's named registry -- so the Deployment
+  # can pin a digest instead of a mutable tag (ADR-005's open follow-up).
+  #
+  # Only on push to develop/main, like package: a pull request's image is a
+  # candidate, and candidates do not get published. Two tags per build: the
+  # commit SHA (immutable, what the digest pin traces back to) and the branch
+  # name (a convenience pointer, never deployed by name).
+  publish:
+    name: publish
+    needs: [backend, frontend, image, e2e]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # The workflow default is contents: read. Publishing needs exactly one more
+    # scope, granted here and nowhere else.
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v4.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # provenance: false so the push is a single manifest, not an attestation
+      # list -- the digest printed below is then the digest the cluster pulls,
+      # with no unknown/unknown entries beside it.
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v7.3.0
+        with:
+          context: backend
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/pupilliluke/crm-api:${{ github.sha }}
+            ghcr.io/pupilliluke/crm-api:${{ github.ref_name }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The digest is the whole point of the job. Surfacing it here means
+      # pinning the manifest is copy-paste from the run summary, not a docker
+      # command against a machine that happens to have the image.
+      - name: Record the digest
+        run: |
+          {
+            echo "## Published image"
+            echo
+            echo '```'
+            echo "ghcr.io/pupilliluke/crm-api@${{ steps.push.outputs.digest }}"
+            echo "commit ${{ github.sha }}"
+            echo '```'
+            echo
+            echo "Pin it: set this ref as \`image:\` in k8s/deployment.yaml."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -16,7 +16,6 @@ export default function CustomerFormPage({
   edit?: Customer
 }) {
   const isEdit = !!edit
-  const [customerId, setCustomerId] = useState(edit?.customerId ?? '')
   const [fullName, setFullName] = useState(edit?.fullName ?? '')
   const [email, setEmail] = useState(edit?.email ?? '')
   const [phone, setPhone] = useState(edit?.phone ?? '')
@@ -24,7 +23,7 @@ export default function CustomerFormPage({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const valid = customerId.trim() && fullName.trim() && email.trim()
+  const valid = fullName.trim() && email.trim()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -32,6 +31,7 @@ export default function CustomerFormPage({
     setSaving(true)
     setError(null)
     try {
+      let customerId: string
       if (isEdit) {
         await customersApi.update(edit.customerId, {
           fullName: fullName.trim(),
@@ -39,17 +39,19 @@ export default function CustomerFormPage({
           phone: phone.trim() || undefined,
           status,
         })
+        customerId = edit.customerId
       } else {
-        await customersApi.create({
-          customerId: customerId.trim(),
+        //customerId is not received from backend not input
+        const created = await customersApi.create({
           fullName: fullName.trim(),
           email: email.trim(),
           phone: phone.trim() || undefined,
           status,
         })
+        customerId = created.customerId
       }
       onCreated()
-      navigate({ name: 'details', customerId: customerId.trim() })
+      navigate({ name: 'details', customerId })
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not save customer')
     } finally {
@@ -75,10 +77,12 @@ export default function CustomerFormPage({
 
         <form id="cust-form" onSubmit={handleSubmit}>
           <div className="form-grid">
-            <div className="form-field">
-              <label>Customer ID <span className="req">*</span></label>
-              <input value={customerId} disabled={isEdit} onChange={(e) => setCustomerId(e.target.value)} placeholder="CUS-1006" />
-            </div>
+            {isEdit && (
+              <div className="form-field">
+                <label>Customer ID</label>
+                <input value={edit.customerId} disabled />
+              </div>
+            )}
             <div className="form-field">
               <label>Status</label>
               <select value={status} onChange={(e) => setStatus(e.target.value as CustomerStatus)}>

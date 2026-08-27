@@ -34,11 +34,6 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(DuplicateCustomerException.class)
-    public ResponseEntity<Map<String, Object>> handleDuplicate(DuplicateCustomerException ex) {
-        return build(HttpStatus.CONFLICT, ex.getMessage());
-    }
-
     @ExceptionHandler({DuplicateUserException.class, SelfUserModificationException.class,
             LastAdminException.class})
     public ResponseEntity<Map<String, Object>> handleUserConflict(RuntimeException ex) {
@@ -55,6 +50,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidCredentials(InvalidCredentialsException ex) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    // The Google credential was valid but the account is not enabled — a
+    // first-time sign-in that just provisioned a disabled account, or one still
+    // awaiting approval. 403, not 401: we know who they are, they may not in yet.
+    @ExceptionHandler(AccountPendingApprovalException.class)
+    public ResponseEntity<Map<String, Object>> handlePendingApproval(AccountPendingApprovalException ex) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
     // Needed because of the catch-all below. Spring Security's own

@@ -197,12 +197,21 @@ one person's lane and largely independent of the rest.
 ## Week 5 — DevOps, CI/CD and Kubernetes
 
 ### Lab 40 — Application security testing
-- [~] A scanner runs in CI — Trivy over the image, on every pull request. It is
-      report-only, and it is not Dependency-Check
-- [ ] Fix or accept each finding, with an owner and a date — 8 critical and 41
-      high are outstanding, nearly all from spring-boot-parent 3.3.5 being a
-      year and a half old. Bumping it is the fix; until then the gate cannot
-      be turned on
+- [x] A scanner runs in CI — Trivy over the image, on every pull request, and
+      it gates: `exit-code: "1"` on HIGH or CRITICAL. The image carries the
+      Spring Boot fat jar, so `BOOT-INF/lib` is scanned along with the OS layer
+- [x] Fix or accept each finding, with an owner and a date — the 8 critical and
+      41 high came from spring-boot-parent 3.3.5; bumping to 3.5.16 cleared
+      them. What remains is one real defect, fixed by pinning postgresql
+      42.7.13, and eight Go defects in the base image's `/usr/bin/pebble`,
+      each accepted by id in `.trivyignore.yaml` with an owner and a
+      2026-11-26 expiry
+- [x] Dependency-Check remains available as a second opinion via the
+      `security-scan` Maven profile, but no longer gates CI. It matches on CPE
+      strings rather than package coordinates, which produced three false
+      positives (see `backend/dependency-check-suppressions.xml`) while missing
+      the pgjdbc defect above — and it needs an NVD API key that could not be
+      obtained
 
 ### Lab 41 — Containerise the Spring Boot app
 - [x] Multi-stage Dockerfile producing a small image

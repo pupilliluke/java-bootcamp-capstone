@@ -13,6 +13,7 @@ export type AuthState =
 interface AuthValue {
   state: AuthState
   login: (username: string, password: string) => Promise<void>
+  loginWithGoogle: (idToken: string) => Promise<void>
   logout: () => void
 }
 
@@ -42,6 +43,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       state,
       login: async (username: string, password: string) => {
         const session = await authApi.login(username, password)
+        tokenStore.set(session.accessToken, {
+          username: session.username,
+          role: session.role,
+        })
+        setState({
+          status: 'authenticated',
+          user: { username: session.username, role: session.role },
+        })
+      },
+      loginWithGoogle: async (idToken: string) => {
+        // Same session handling as password login; only the exchange differs.
+        const session = await authApi.googleLogin(idToken)
         tokenStore.set(session.accessToken, {
           username: session.username,
           role: session.role,

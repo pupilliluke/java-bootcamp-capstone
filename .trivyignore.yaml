@@ -1,0 +1,58 @@
+# Trivy ignore file. Same policy as the CI gate it feeds: every entry carries the
+# id it suppresses, a named owner, an expiry, and a reason written down before
+# the entry was added rather than after a build went red.
+#
+# `paths` scopes each entry to the one file the finding is in. A bare id would
+# hide the same CVE everywhere, including in code we do ship and could fix.
+#
+# Empty is the correct state. An entry here is a decision, not a convenience.
+
+vulnerabilities:
+  # Go standard library defects in /usr/bin/pebble, the service manager Canonical
+  # ships inside the Ubuntu base that eclipse-temurin:21-jre is built on.
+  #
+  # Owner: Luke Pupilli. Reviewed 2026-08-26.
+  #
+  # Not our binary and not on our execution path. The Dockerfile's entrypoint is
+  # java against app.jar; pebble is never invoked, so no request ever reaches the
+  # asn1, net/http or dnsmessage code these CVEs describe. Nor can we patch it -
+  # the Go toolchain is compiled into a binary that arrives with the base image,
+  # so the fix is a newer base image digest, not a change we can make here.
+  #
+  # This is a wait, not an acceptance. The Dockerfile pins the base by digest, so
+  # the way out is bumping that pin once Temurin republishes on a rebuilt Ubuntu.
+  # The expiry below forces that to be looked at again rather than forgotten.
+  #
+  # Verify with: docker run --rm --entrypoint /usr/bin/pebble crm-api:test version
+  - id: CVE-2026-33818
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib encoding/asn1 DoS in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-39821
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib golang.org/x/net/idna defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-46600
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib dnsmessage defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-56853
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib net/http unencrypted HTTP/2 defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-56858
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-56859
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-56860
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
+  - id: CVE-2026-56862
+    paths: ["usr/bin/pebble"]
+    statement: "Go stdlib defect in Canonical pebble, shipped in the base image and never executed by our entrypoint. Owner: Luke Pupilli."
+    expired_at: 2026-11-26
