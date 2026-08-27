@@ -1,6 +1,12 @@
 // Matches the Lab 49 backend contract (CustomerResponseDTO + CustomerStatus).
 export type CustomerStatus = 'ACTIVE' | 'SUSPENDED' | 'PROSPECT' | 'CLOSED'
 
+// GET /api/customers answers with every status except CLOSED when asked for no
+// status in particular. A caller that wants closed customers too — anything
+// still filtering or counting client-side — has to say so, and this is the list
+// it says it with.
+export const ALL_CUSTOMER_STATUSES: CustomerStatus[] = ['ACTIVE', 'SUSPENDED', 'PROSPECT', 'CLOSED']
+
 export interface Customer {
   customerId: string
   fullName: string
