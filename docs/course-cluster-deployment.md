@@ -104,6 +104,60 @@ Expected subject: `CN=k3s-server-ca@1784642847` (the pre-rebuild CA was
 the verification working, not a bug — never "fix" it with
 `--insecure-skip-tls-verify`).
 
+## Updating the deployment
+
+The instance above is a snapshot, not the development environment. Day-to-day
+backend work — `mvnw spring-boot:run` against docker compose, the test suite,
+anything on a laptop — never touches the cluster, and the deployed pod goes
+stale harmlessly while it happens. Update only when the URL itself has to show
+newer code: before a demo, or when a teammate needs to see a change at
+`crm-student02.100.22.136.97.nip.io`.
+
+An update is not a redeploy. The Secret, the ConfigMap patches, the ingress
+host and the Service are standing setup — steps 1 to 3 above ran once and do
+not run again. What changes is one field: which image the Deployment runs.
+Two steps:
+
+1. **Merge to develop.** The `publish` job pushes
+   `ghcr.io/pupilliluke/crm-api` automatically and prints the new digest in
+   its run summary. No browser handy:
+   `docker buildx imagetools inspect ghcr.io/pupilliluke/crm-api:develop`
+   prints the same digest from the command line.
+
+2. **Point the Deployment at the digest** — one command:
+
+```
+kubectl -n student02 set image deploy/crm-api   crm-api=ghcr.io/pupilliluke/crm-api@sha256:<new-digest>
+kubectl -n student02 rollout status deploy/crm-api --timeout=300s
+```
+
+The digest, never the `develop` tag, for the same reason the table at the top
+records one: the tag moves, the digest is the build that was verified.
+
+Kubernetes rolls the update — the old pod keeps serving until the new one
+passes readiness — and Flyway applies any new migrations when the new pod
+starts. That last part is the one thing to think about *before* step 2: a
+migration that validates existing data (a new CHECK constraint, a tightened
+NOT NULL) will judge the course database's rows at startup, so run its
+precondition against `bootcamp` first — for a constraint, a `SELECT` proving
+every existing row passes. A failed migration is safe (transactional DDL
+rolls it back and the old pod keeps serving) but it is better found at a
+keyboard than during a deploy window.
+
+Rolling back is step 2 with the previous digest —
+`kubectl -n student02 rollout history deploy/crm-api` lists what ran before.
+
+Two cases need more than `set image`:
+
+- **A new or renamed ConfigMap key** (the topic-prefix work was one): patch
+  the ConfigMap first, with step 3 above as the template, then `set image`.
+- **A changed ingress or Service shape**: re-apply that manifest with the
+  step 2 `kubectl apply`, then re-run the step 3 ingress patch if the host
+  rule was touched.
+
+Plain code changes — a controller, a service, validation — are always just
+the two steps.
+
 ## Verification record (2026-08-27)
 
 Every check below ran against the live deployment through the public

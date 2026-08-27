@@ -1,75 +1,84 @@
-# Frontend — Neural
+# CRM frontend
 
-React + **TypeScript** (Vite) admin UI for the capstone, modeled on the
-"Customer Management Screens" mockup. Plain CSS, no UI/router/chart libraries —
-navigation is plain React state and the charts are hand-rolled SVG, to stay
-inside the bootcamp toolset (Lab 33–36 / Lab 50 idioms).
+React + TypeScript (Vite). In development it runs behind `npm run dev` with a
+dev proxy; in production the `frontend/` folder deploys **standalone to Vercel**
+(or any static host with edge rewrites) and talks to the deployed API.
 
-## Run it
+## The API connection, and why there is no CORS
 
-```bash
-cd frontend
-npm install
-npm run dev
+Every API call uses a **relative path** — `src/api/http.ts` starts from
+`VITE_API_BASE_URL || ''`, which is empty, so the app requests `/api/...` on
+whatever origin served it. That single choice is what keeps the whole stack
+**same-origin** in all three environments, so the backend needs no CORS config:
+
+| Environment | How `/api` reaches the backend | Origin the browser sees |
+| ----------- | ------------------------------ | ----------------------- |
+| `npm run dev` | Vite dev proxy (`vite.config.ts`) forwards `/api` server-side | `localhost:5173` |
+| Vercel | `vercel.json` rewrite forwards `/api` at the edge, server-side | your `*.vercel.app` domain |
+| One-host k8s (alt.) | Traefik routes `/api` to `crm-api` behind one ingress host | the ingress host |
+
+In every case the browser only ever calls the origin it was served from; the
+proxy hop to the API happens server-side. So there is no cross-origin request,
+no preflight, and deliberately no `CorsConfigurationSource` bean. Full stance in
+`docs/threat-model.md`.
+
+Do **not** set `VITE_API_BASE_URL` to the API's absolute URL to "just point it
+at the cluster." The API is plain HTTP; a browser on an HTTPS Vercel page will
+block that request as mixed content, and it would be cross-origin on top. The
+edge rewrite in `vercel.json` avoids both — it is the supported path.
+
+## Deploy to Vercel
+
+1. **Import the repo** in Vercel and set **Root Directory = `frontend`**. Vercel
+   detects Vite; build command `npm run build`, output `dist` — leave the
+   defaults.
+2. **Point the rewrite at your API.** `vercel.json` proxies `/api` and
+   `/actuator` to `http://crm-student02.100.22.136.97.nip.io`. That is
+   **student02's** namespace host — if you deploy your own, change both
+   `destination` hosts to `crm-studentNN.100.22.136.97.nip.io`. (Vercel does not
+   interpolate env vars into rewrite destinations, so this host is edited in the
+   file, matching the per-student pattern in `k8s/cluster/configmap.yaml`.)
+3. **Set one environment variable:** `VITE_ENABLE_GSI=false`. This builds the UI
+   with password login only and no Google button — see below.
+4. Deploy. Sign in with the seeded demo accounts (`agent1`/`agent1`,
+   `admin1`/`admin1`).
+
+### Google Sign-In
+
+Google Sign-In needs the **serving origin** registered in the OAuth client's
+authorized JavaScript origins. The Vercel domain is not in that list, so the
+deployed demo runs with `VITE_ENABLE_GSI=false` and password login — the same
+choice CI and the Playwright journey already make. To enable it, add your
+`*.vercel.app` origin (and any custom domain) to the OAuth client in the Google
+Cloud project, then set `VITE_ENABLE_GSI=true`.
+
+### The one dependency to check first
+
+The Vercel edge fetches the API from Vercel's own servers, not your laptop. That
+only works if the course box accepts connections from arbitrary external IPs on
+`:80`. The setup notes say Postgres and Kafka are restricted to class IPs and
+are silent on the ingress; a quick check is to open
+`http://crm-studentNN.100.22.136.97.nip.io/actuator/health/readiness` from a
+phone on cellular. If it answers, Vercel can reach it. If the box is class-IP
+restricted, Vercel cannot proxy to it — fall back to running the UI on a laptop
+with `npm run dev` (the dev proxy reaches the cluster from your allowed IP), or
+serve the UI same-origin inside the cluster.
+
+## Local development
+
+```
+npm ci
+npm run dev        # http://localhost:5173, proxied to a local backend on :8080
 ```
 
-Open http://localhost:5173. The dev server proxies `/api/*` to the Spring Boot
-backend on `http://localhost:8080` (see `vite.config.ts`), so run the backend
-too for the real screens to show live data.
+Point the dev proxy at the deployed API instead by setting `VITE_PROXY_TARGET`
+in a gitignored `.env.local` — see the repo README's course-cluster section.
 
-## Commands
+## Scripts
 
-```bash
-npm run dev      # dev server
-npm run build    # tsc -b && vite build (typecheck + production build)
-npm test         # vitest
-npm run test:ci  # one non-watch Vitest run
-npm run test:e2e # Playwright journey; requires PostgreSQL and Kafka
-```
-
-## Screens
-
-| # | Screen | Data source |
-|---|--------|-------------|
-| — | Dashboard | **Real** — counts derived from `GET /api/customers` |
-| 1 | Customer List (search, status filter, pagination) | **Real** — `GET /api/customers` |
-| 2 | Customer Details (Overview tab) | **Real** — `GET /api/customers/{id}` |
-| 2 | Details → Activities tab (record interaction) | **Real** — `POST /api/interactions` |
-| 2 | Details → Activities tab (interaction history) | **Real** — `GET /api/customers/{id}/interactions` |
-| 3 | Add Customer | **Real** — `POST /api/customers` |
-| 3 | Edit Customer | **Real** — `PUT /api/customers/{id}` |
-| 4 | Contacts | ⚠️ **Demo data** — no backend endpoint |
-| 5 | Global Activities screen | ⚠️ **Demo data** — no global activity endpoint |
-| 6 | Reports (KPIs + charts) | ⚠️ **Demo data** — no aggregation endpoint |
-
-Every screen driven by mock data shows a visible **◇ Demo data** tag so
-fabricated numbers are never mistaken for real, persisted data. All mock data
-lives in one file: `src/mock/mockData.ts` — delete it (and the screens that
-import it) once real endpoints exist.
-
-## Structure
-
-```
-src/
-  api/            # http wrapper + ApiError + customersApi / interactionsApi
-  hooks/          # useCustomers (list), useCustomer (by id)
-  components/     # Sidebar, StatusBadge, Pagination, DonutChart, BarChart, DemoTag, icons
-  pages/          # one file per screen (Dashboard, CustomerList, CustomerDetails, …)
-  mock/mockData.ts# ⚠️ all hardcoded demo data, isolated here
-  types/customer.ts
-  nav.ts          # Page union + Navigate type (state-based navigation)
-  App.tsx         # composition root: sidebar + page switch
-```
-
-## Backend contract used
-
-- `GET /api/customers` → `CustomerResponseDTO[]`
-- `GET /api/customers/{customerId}` → `CustomerResponseDTO`
-- `GET /api/customers/{customerId}/interactions` → `InteractionResponseDTO[]`
-- `POST /api/customers` ← `CustomerRequestDTO { customerId, fullName, email, phone?, status }`
-- `PUT /api/customers/{customerId}` ← `CustomerUpdateDTO`
-- `POST /api/interactions` ← `CreateInteractionRequest { customerId, channel, notes }` (201, saved then published)
-
-## Stack
-
-Vite + React 18 + TypeScript, Vitest, and Playwright.
+| Command | What it does |
+| ------- | ------------ |
+| `npm run dev` | Vite dev server with the `/api` proxy |
+| `npm run build` | Type-check (`tsc -b`) then build to `dist/` |
+| `npm run test:ci` | Vitest component and API unit tests |
+| `npm run test:e2e` | Playwright browser journey (starts backend + Vite) |
