@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/customers")
+@RequestMapping("/api/v1/customers")
 public class CustomerController {
 
     private final CustomerService customerService;
@@ -56,7 +56,7 @@ public class CustomerController {
     /**
      * One page of customers.
      *
-     * <p>Every parameter has a default, so {@code GET /api/customers} still
+     * <p>Every parameter has a default, so {@code GET /api/v1/customers} still
      * answers without any of them -- but it now answers with the first page
      * rather than the whole book. size is capped in the service; sort is an
      * allow-list and an unknown property is a 400.

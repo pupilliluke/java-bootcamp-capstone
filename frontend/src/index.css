@@ -467,6 +467,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .kpi-icon.blue { background: var(--primary-soft); color: var(--primary); }
 .kpi-icon.green { background: var(--green-soft); color: var(--green); }
 .kpi-icon.red { background: var(--red-soft); color: var(--red); }
+.kpi-icon.amber { background: var(--amber-soft); color: var(--amber); }
 
 /* ============ reports layout ============ */
 .reports-layout { display: grid; grid-template-columns: 210px 1fr; gap: 1.1rem; align-items: start; }
@@ -676,4 +677,153 @@ table.data tbody tr:last-child td { border-bottom: none; }
   width: auto;
   margin: 0;
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Interaction timeline
+   Replaces the flat interaction table on the customer Activities tab. Plain
+   CSS on the existing tokens, so it inherits the palette rather than
+   introducing a second one. The rail is a border on the list, not a pseudo
+   element per row, which keeps it continuous when a row wraps to two lines.
+--------------------------------------------------------------------------- */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tl-group + .tl-group { margin-top: 1.25rem; }
+
+/* Sticky so the date stays visible while scrolling a long history. */
+.tl-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 0 0.6rem;
+  padding: 0.15rem 0;
+  background: var(--surface);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.tl-items {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  border-left: 2px solid var(--border);
+}
+
+.tl-item {
+  position: relative;
+  padding: 0 0 0 1.1rem;
+}
+
+.tl-item + .tl-item { margin-top: 0.9rem; }
+
+/* The node sits on the rail: half its width back over the 2px border. */
+.tl-node {
+  position: absolute;
+  left: calc(-0.5rem - 1px);
+  top: 0.35rem;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.tl-body {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tl-item:hover .tl-body {
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 3px rgb(27 39 51 / 8%);
+}
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+}
+
+.tl-channel {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.tl-time {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.tl-notes {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* Monospace and truncated: it is an identifier to copy or match against a log
+   line, not prose to read. */
+.tl-id {
+  margin: 0.35rem 0 0;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Per-channel accents. Only the node and the badge change, so the timeline
+   still reads as one object rather than three competing colour schemes. */
+.tl-phone .tl-node { background: var(--primary); }
+
+.tl-email .tl-node { background: var(--accent); }
+.tl-email .tl-channel { background: var(--accent-soft); color: var(--accent-hover); }
+
+.tl-chat .tl-node { background: var(--green); }
+.tl-chat .tl-channel { background: var(--green-soft); color: var(--green); }
+
+@media (max-width: 640px) {
+  .tl-head { flex-wrap: wrap; gap: 0.35rem; }
+  .tl-body { padding: 0.55rem 0.6rem; }
+}
+
+/* Timeline on the dashboard: one feed across customers, so each row names its
+   customer and is a way into that record. Both are inert on a customer's own
+   page, where every row is theirs already. */
+.tl-customer {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tl-clickable { cursor: pointer; }
+
+.tl-clickable:hover {
+  border-color: var(--primary);
+  box-shadow: 0 1px 4px rgb(0 105 170 / 12%);
+}
+
+.tl-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

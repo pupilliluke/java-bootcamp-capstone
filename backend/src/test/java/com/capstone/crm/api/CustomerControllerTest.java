@@ -33,7 +33,7 @@ class CustomerControllerTest {
 
     @Test
     void anonymousUpdateIsUnauthorized() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
                 .andExpect(status().isUnauthorized());
@@ -41,7 +41,7 @@ class CustomerControllerTest {
 
     @Test
     void anonymousDeleteIsUnauthorized() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001"))
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -54,7 +54,7 @@ class CustomerControllerTest {
     //
     @Test
     void updateWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -63,24 +63,24 @@ class CustomerControllerTest {
 
     @Test
     void deleteWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001")
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER")))
                 .andExpect(status().isUnauthorized());
     }
 
     // The difference between 401 and 403 in one pair of tests: agent1 is a real,
     // enabled account and is told who they are — they simply may not do this.
-    // Deleting is admin-only; everything else on /api/customers is not.
+    // Deleting is admin-only; everything else on /api/v1/customers is not.
     @Test
     void agentIsForbiddenFromDeletingACustomer() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001")
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void agentCanUpdateAnExistingCustomer() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -92,7 +92,7 @@ class CustomerControllerTest {
 
     @Test
     void updatingAnUnknownCustomerIsNotFound() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-9999")
+        mockMvc.perform(put("/api/v1/customers/CUS-9999")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -104,11 +104,11 @@ class CustomerControllerTest {
         String token = jwtService.issueToken("admin1", "ADMIN");
         String customerId = createCustomer(token);
 
-        mockMvc.perform(delete("/api/customers/" + customerId)
+        mockMvc.perform(delete("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/customers/" + customerId)
+        mockMvc.perform(get("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
@@ -118,7 +118,7 @@ class CustomerControllerTest {
     // lookup it is meant to test.
     @Test
     void deletingAnUnknownCustomerIsNotFound() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-9999")
+        mockMvc.perform(delete("/api/v1/customers/CUS-9999")
                         .header("Authorization", "Bearer " + jwtService.issueToken("admin1", "ADMIN")))
                 .andExpect(status().isNotFound());
     }
@@ -138,7 +138,7 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
@@ -151,13 +151,13 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Renamed While Closed", randomEmail(), "CLOSED")))
@@ -178,12 +178,12 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(get("/api/customers/" + customerId.toLowerCase())
+        mockMvc.perform(get("/api/v1/customers/" + customerId.toLowerCase())
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerId").value(customerId));
 
-        mockMvc.perform(get("/api/customers/" + customerId)
+        mockMvc.perform(get("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerId").value(customerId));
@@ -301,7 +301,7 @@ class CustomerControllerTest {
     void unknownSortPropertyIsRejectedAsABadRequest() throws Exception {
         String agent = jwtService.issueToken("agent1", "AGENT");
 
-        mockMvc.perform(get("/api/customers?sort=passwordHash")
+        mockMvc.perform(get("/api/v1/customers?sort=passwordHash")
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isBadRequest());
     }
@@ -311,7 +311,7 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         createCustomer(agent);
 
-        mockMvc.perform(get("/api/customers?sort=fullName&direction=desc")
+        mockMvc.perform(get("/api/v1/customers?sort=fullName&direction=desc")
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk());
     }
@@ -336,13 +336,13 @@ class CustomerControllerTest {
     // this is here to fail if the handler is ever removed.
     @Test
     void anUnknownStatusValueIsBadRequest() throws Exception {
-        mockMvc.perform(get("/api/customers?status=VIP")
+        mockMvc.perform(get("/api/v1/customers?status=VIP")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isBadRequest());
     }
 
     private String listWith(String token, String query) throws Exception {
-        return mockMvc.perform(get("/api/customers" + query)
+        return mockMvc.perform(get("/api/v1/customers" + query)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -363,7 +363,7 @@ class CustomerControllerTest {
     // carries a fresh email for the same reason createCustomer does.
     private String closedCustomer(String token) throws Exception {
         String customerId = createCustomer(token);
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Closed Customer", randomEmail(), "CLOSED")))
@@ -375,7 +375,7 @@ class CustomerControllerTest {
     // declares uq_customer_email — a shared address makes the second insert a
     // 409, and customer_id is no longer available to derive one from.
     private String createCustomer(String token) throws Exception {
-        String body = mockMvc.perform(post("/api/customers")
+        String body = mockMvc.perform(post("/api/v1/customers")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -388,7 +388,7 @@ class CustomerControllerTest {
 
     // Same as createCustomer, with a name the search test can look for.
     private String createNamed(String token, String fullName) throws Exception {
-        String body = mockMvc.perform(post("/api/customers")
+        String body = mockMvc.perform(post("/api/v1/customers")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus(fullName, randomEmail(), "ACTIVE")))

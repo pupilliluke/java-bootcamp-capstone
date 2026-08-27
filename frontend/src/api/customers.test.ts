@@ -15,7 +15,7 @@ describe('customersApi', () => {
 
     expect(fetchMock).toHaveBeenCalledOnce()
     const url = fetchMock.mock.calls[0][0] as string
-    expect(url).toContain('/api/customers/CUS-1001')
+    expect(url).toContain('/api/v1/customers/CUS-1001')
   })
 
   // The server treats `status` as repeatable, so several statuses go out as
@@ -29,7 +29,7 @@ describe('customersApi', () => {
     await customersApi.page({ statuses: ['ACTIVE', 'CLOSED'] })
 
     const url = fetchMock.mock.calls[0][0] as string
-    expect(url).toContain('/api/customers?status=ACTIVE&status=CLOSED')
+    expect(url).toContain('/api/v1/customers?status=ACTIVE&status=CLOSED')
   })
 
   // No argument means the server's own default, which is every status except
@@ -41,6 +41,6 @@ describe('customersApi', () => {
 
     await customersApi.page()
 
-    expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/api\/customers$/)
+    expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/api\/v1\/customers$/)
   })
 })

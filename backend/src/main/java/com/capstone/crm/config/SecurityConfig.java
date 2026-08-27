@@ -42,8 +42,8 @@ public class SecurityConfig {
                         // Sign-up is public by design. It can only ever create a
                         // disabled AGENT, so an anonymous caller gains an account
                         // that still cannot authenticate until an admin enables it.
-                        .requestMatchers("/api/auth/login", "/api/auth/register",
-                                "/api/auth/google", "/error").permitAll()
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register",
+                                "/api/v1/auth/google", "/error").permitAll()
                         // "/actuator/health" is an exact match, not a prefix, so the
                         // probes need naming. Listing them keeps the grant narrow:
                         // component detail stays authenticated.
@@ -54,10 +54,10 @@ public class SecurityConfig {
                         // cannot do. Listed before the general rule because matchers
                         // are evaluated in order and the first match wins — put this
                         // after it and hasAnyRole would already have allowed it.
-                        .requestMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
-                        .requestMatchers("/api/customers/**").hasAnyRole("AGENT", "ADMIN")
-                        .requestMatchers("/api/interactions/**").hasAnyRole("AGENT", "ADMIN")
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/customers/**").hasRole("ADMIN")
+                        .requestMatchers("/api/v1/customers/**").hasAnyRole("AGENT", "ADMIN")
+                        .requestMatchers("/api/v1/interactions/**").hasAnyRole("AGENT", "ADMIN")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().denyAll())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) ->

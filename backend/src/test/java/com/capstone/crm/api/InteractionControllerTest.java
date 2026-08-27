@@ -47,7 +47,7 @@ class InteractionControllerTest {
     void agentCanCreateAndReadBackAnInteraction() throws Exception {
         String token = jwtService.issueToken("agent1", "AGENT");
 
-        mockMvc.perform(post("/api/interactions")
+        mockMvc.perform(post("/api/v1/interactions")
                         .header("Authorization", "Bearer " + token)
                         .header("X-Correlation-Id", "journey-test")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -75,7 +75,7 @@ class InteractionControllerTest {
         assertThat(saved.getCorrelationId()).isEqualTo("journey-test");
         assertThat(saved.getCreatedBy()).isEqualTo("agent1");
 
-        mockMvc.perform(get("/api/customers/CUS-1001/interactions")
+        mockMvc.perform(get("/api/v1/customers/CUS-1001/interactions")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
@@ -88,13 +88,13 @@ class InteractionControllerTest {
 
     @Test
     void anonymousUserCannotReadCustomerInteractions() throws Exception {
-        mockMvc.perform(get("/api/customers/CUS-1001/interactions"))
+        mockMvc.perform(get("/api/v1/customers/CUS-1001/interactions"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void interactionsForAnUnknownCustomerAreNotFound() throws Exception {
-        mockMvc.perform(get("/api/customers/CUS-9999/interactions")
+        mockMvc.perform(get("/api/v1/customers/CUS-9999/interactions")
                         .header("Authorization", "Bearer "
                                 + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isNotFound())
@@ -106,7 +106,7 @@ class InteractionControllerTest {
     // closed set this request was accepted, stored and published.
     @Test
     void unknownChannelIsRejectedWithNoRowAndNoEvent() throws Exception {
-        mockMvc.perform(post("/api/interactions")
+        mockMvc.perform(post("/api/v1/interactions")
                         .header("Authorization", "Bearer "
                                 + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -126,7 +126,7 @@ class InteractionControllerTest {
     // the door, with the same field error as any other unknown value.
     @Test
     void lowercaseChannelIsRejected() throws Exception {
-        mockMvc.perform(post("/api/interactions")
+        mockMvc.perform(post("/api/v1/interactions")
                         .header("Authorization", "Bearer "
                                 + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)

@@ -242,7 +242,7 @@ addQuiet('AUTH', 'jwt secret',
 let token = null
 if (answered) {
   try {
-    const res = await fetch(`${api}/api/auth/login`, {
+    const res = await fetch(`${api}/api/v1/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'agent1', password: 'agent1' }),
@@ -272,15 +272,15 @@ if (answered) {
   }
 
   if (token) {
-    const read = await get('/api/customers', token)
+    const read = await get('/api/v1/customers', token)
     add('AUTH', 'authorised read',
-      read.ok ? '/api/customers returned 200'
-        : `/api/customers returned ${read.status} — a valid token was refused, or the endpoint errored`,
+      read.ok ? '/api/v1/customers returned 200'
+        : `/api/v1/customers returned ${read.status} — a valid token was refused, or the endpoint errored`,
       read.ok)
   }
 
   try {
-    const res = await get('/api/customers')
+    const res = await get('/api/v1/customers')
     add('AUTH', 'anonymous refused',
       res.status === 401 ? 'HTTP 401'
         : `HTTP ${res.status} — SECURITY IS NOT WORKING. An unauthenticated caller reached customer data. Do not deploy until this is 401`,
