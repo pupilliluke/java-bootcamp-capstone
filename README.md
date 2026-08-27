@@ -267,8 +267,9 @@ before demo day, never during.
 | `GET` | `/api/customers/{customerId}/interactions` | Read persisted interaction history |
 
 The interaction endpoint accepts `customerId`, `channel`, and `notes`. It saves
-the interaction, publishes the event, and returns `202 Accepted`. The customer
-details screen reads the resulting history from the nested GET endpoint.
+the interaction, publishes the event, and returns `201 Created` with the stored
+interaction in the response body. The customer details screen reads the
+resulting history from the nested GET endpoint.
 
 ## Test the project
 

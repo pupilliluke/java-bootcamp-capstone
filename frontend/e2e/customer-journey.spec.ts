@@ -119,7 +119,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
       await page.getByRole('button', { name: 'Add Activity', exact: true }).click()
 
       const interactionResponse = await interactionResponsePromise
-      expect(interactionResponse.status()).toBe(202)
+      expect(interactionResponse.status()).toBe(201)
       expect(await interactionResponse.headerValue('x-correlation-id')).toBeTruthy()
 
       const sessionRow = page.getByRole('row').filter({ hasText: interactionNotes })

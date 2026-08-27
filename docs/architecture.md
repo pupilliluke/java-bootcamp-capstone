@@ -197,7 +197,7 @@ flowchart TB
 
 | | Today | Target | Why |
 | ---- | ----- | ------ | --- |
-| Interaction record | row in `interaction`, written before publishing and exposed by GET | keep this behavior | The browser journey now verifies persistence instead of trusting a `202 Accepted`. |
+| Interaction record | row in `interaction`, written before publishing and exposed by GET | keep this behavior | The create endpoint returns `201 Created`, and the browser journey independently verifies persistence by reading the interaction back. |
 | Customer lookup | in-memory map | `customer` table | Survives a restart. Also what Lab 50's UI-to-database flow needs. |
 | Publish | directly from the service | outbox row, published by a relay | Writing the row and publishing separately is a dual write: the transaction can commit and the publish fail, leaving the database and the log disagreeing. One transaction removes the gap. |
 | Idempotency store | `ConcurrentHashMap` | `processed_event` table | Per-JVM state is per-replica state. With more than one pod, each has its own set, and the exactly-once guarantee stops holding. |
