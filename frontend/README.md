@@ -2,7 +2,9 @@
 
 React + TypeScript (Vite). In development it runs behind `npm run dev` with a
 dev proxy; in production the `frontend/` folder deploys **standalone to Vercel**
-(or any static host with edge rewrites) and talks to the deployed API.
+(or any static host with edge rewrites) and talks to the deployed API. The
+production home is **<https://www.neuralcrm.xyz>** — the apex redirects there
+permanently (`vercel.json`), so `www` is the one canonical origin.
 
 ## The API connection, and why there is no CORS
 
@@ -14,7 +16,7 @@ whatever origin served it. That single choice is what keeps the whole stack
 | Environment | How `/api` reaches the backend | Origin the browser sees |
 | ----------- | ------------------------------ | ----------------------- |
 | `npm run dev` | Vite dev proxy (`vite.config.ts`) forwards `/api` server-side | `localhost:5173` |
-| Vercel | `vercel.json` rewrite forwards `/api` at the edge, server-side | your `*.vercel.app` domain |
+| Vercel | `vercel.json` rewrite forwards `/api` at the edge, server-side | `https://www.neuralcrm.xyz` (previews: `*.vercel.app`) |
 | One-host k8s (alt.) | Traefik routes `/api` to `crm-api` behind one ingress host | the ingress host |
 
 In every case the browser only ever calls the origin it was served from; the
@@ -40,7 +42,13 @@ edge rewrite in `vercel.json` avoids both — it is the supported path.
    file, matching the per-student pattern in `k8s/cluster/configmap.yaml`.)
 3. **Set one environment variable:** `VITE_ENABLE_GSI=false`. This builds the UI
    with password login only and no Google button — see below.
-4. Deploy. Sign in with the seeded demo accounts (`agent1`/`agent1`,
+4. **Attach the domain.** Project → Settings → Domains: add
+   `www.neuralcrm.xyz` (primary) and `neuralcrm.xyz`. At the registrar, point
+   `www` at `cname.vercel-dns.com` (CNAME) and the apex at Vercel's A record
+   `76.76.21.21`. The apex needs no redirect config in the dashboard —
+   `vercel.json` already 308s it to `www`, so the redirect is versioned with
+   the code instead of living in a console.
+5. Deploy. Sign in with the seeded demo accounts (`agent1`/`agent1`,
    `admin1`/`admin1`).
 
 ### Google Sign-In
@@ -48,9 +56,10 @@ edge rewrite in `vercel.json` avoids both — it is the supported path.
 Google Sign-In needs the **serving origin** registered in the OAuth client's
 authorized JavaScript origins. The Vercel domain is not in that list, so the
 deployed demo runs with `VITE_ENABLE_GSI=false` and password login — the same
-choice CI and the Playwright journey already make. To enable it, add your
-`*.vercel.app` origin (and any custom domain) to the OAuth client in the Google
-Cloud project, then set `VITE_ENABLE_GSI=true`.
+choice CI and the Playwright journey already make. To enable it, add
+`https://www.neuralcrm.xyz` (and the `*.vercel.app` preview origin, if sign-in
+should also work on previews) to the OAuth client in the Google Cloud project,
+then set `VITE_ENABLE_GSI=true`.
 
 ### The one dependency to check first
 
