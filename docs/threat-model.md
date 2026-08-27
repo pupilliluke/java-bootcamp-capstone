@@ -36,7 +36,7 @@ The repository is public. Anything committed is published.
 
 ## The CORS stance, in full
 
-The application makes **no CORS configuration**, and that is the finished state, not an unfinished one. `SecurityConfig` keeps `http.cors(Customizer.withDefaults())` with no `CorsConfigurationSource` bean, so Spring emits no `Access-Control-*` headers at all. The frontend calls the API with a relative path (`src/api/v1/http.ts`, `VITE_API_BASE_URL` empty), so every request goes to the origin that served the page — and in every environment that origin forwards `/api` to the backend **server-side**, never in the browser:
+The application makes **no CORS configuration**, and that is the finished state, not an unfinished one. `SecurityConfig` keeps `http.cors(Customizer.withDefaults())` with no `CorsConfigurationSource` bean, so Spring emits no `Access-Control-*` headers at all. The frontend calls the API with a relative path (`src/api/http.ts`, `VITE_API_BASE_URL` empty), so every request goes to the origin that served the page — and in every environment that origin forwards `/api` to the backend **server-side**, never in the browser:
 
 | Environment | `/api` forwarded by | Browser's origin |
 | ----------- | ------------------- | ---------------- |

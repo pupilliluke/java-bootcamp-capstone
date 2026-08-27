@@ -41,6 +41,6 @@ describe('customersApi', () => {
 
     await customersApi.list()
 
-    expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/api\/customers$/)
+    expect(fetchMock.mock.calls[0][0] as string).toMatch(/\/api\/v1\/customers$/)
   })
 })

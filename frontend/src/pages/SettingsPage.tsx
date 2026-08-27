@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { adminApi } from '../api/v1/admin'
-import type { PendingUser } from '../api/v1/admin'
-import { ApiError } from '../api/v1/ApiError'
+import { adminApi } from '../api/admin'
+import type { PendingUser } from '../api/admin'
+import { ApiError } from '../api/ApiError'
 
 // Issue #16: ADMINs review and approve new self-registered accounts (which are
 // created disabled). AGENTs see a notice; the backend also enforces this (403).

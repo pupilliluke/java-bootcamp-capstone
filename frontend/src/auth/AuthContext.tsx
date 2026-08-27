@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { authApi } from '../api/v1/auth'
+import { authApi } from '../api/auth'
 import { onAuthEvent } from './authEvents'
 import { tokenStore } from './tokenStore'
 import type { SessionUser } from './tokenStore'

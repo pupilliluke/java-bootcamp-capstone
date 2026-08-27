@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { customersApi } from '../api/v1/customers'
-import { ApiError } from '../api/v1/ApiError'
+import { customersApi } from '../api/customers'
+import { ApiError } from '../api/ApiError'
 import type { Customer } from '../types/customer'
 
 // Loads a single customer by id (GET /api/v1/customers/{id}).
