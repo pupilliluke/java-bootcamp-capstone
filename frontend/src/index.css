@@ -464,6 +464,7 @@ table.data tbody tr:last-child td { border-bottom: none; }
 .kpi-icon.blue { background: var(--primary-soft); color: var(--primary); }
 .kpi-icon.green { background: var(--green-soft); color: var(--green); }
 .kpi-icon.red { background: var(--red-soft); color: var(--red); }
+.kpi-icon.amber { background: var(--amber-soft); color: var(--amber); }
 
 /* ============ reports layout ============ */
 .reports-layout { display: grid; grid-template-columns: 210px 1fr; gap: 1.1rem; align-items: start; }
@@ -801,4 +802,25 @@ table.data tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 640px) {
   .tl-head { flex-wrap: wrap; gap: 0.35rem; }
   .tl-body { padding: 0.55rem 0.6rem; }
+}
+
+/* Timeline on the dashboard: one feed across customers, so each row names its
+   customer and is a way into that record. Both are inert on a customer's own
+   page, where every row is theirs already. */
+.tl-customer {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.tl-clickable { cursor: pointer; }
+
+.tl-clickable:hover {
+  border-color: var(--primary);
+  box-shadow: 0 1px 4px rgb(0 105 170 / 12%);
+}
+
+.tl-clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

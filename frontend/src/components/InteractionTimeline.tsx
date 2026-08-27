@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import type { Interaction } from '../types/customer'
 
 // A vertical timeline for a customer's interactions, replacing the flat table.
@@ -10,6 +11,13 @@ import type { Interaction } from '../types/customer'
 
 interface Props {
   interactions: Interaction[]
+  // Customer id -> display name. Supplied by the dashboard, where one feed
+  // mixes several customers and "who" is the first thing you need. Omitted on
+  // a customer's own page, where every row is obviously theirs.
+  customerNames?: Record<string, string>
+  // Called when a row is activated. Only wired up on the dashboard, where the
+  // feed is a way into the customer.
+  onSelect?: (customerId: string) => void
 }
 
 // Channel drives the accent colour of the node and badge. Keeping the map here
@@ -42,7 +50,7 @@ function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-export default function InteractionTimeline({ interactions }: Props) {
+export default function InteractionTimeline({ interactions, customerNames, onSelect }: Props) {
   // Newest first. The API already orders by occurredAt, but sorting here keeps
   // the component correct if it is ever handed an unordered list.
   const ordered = [...interactions].sort(
@@ -66,9 +74,31 @@ export default function InteractionTimeline({ interactions }: Props) {
             {group.items.map((it) => (
               <li key={it.interactionId} className={`tl-item ${CHANNEL_CLASS[it.channel] ?? ''}`}>
                 <span className="tl-node" aria-hidden="true" />
-                <div className="tl-body">
+                <div
+                  className={`tl-body${onSelect ? ' tl-clickable' : ''}`}
+                  // A button would be the obvious control, but the row carries
+                  // its own text and time; making the whole card a button
+                  // flattens that into one label. role + key handler keeps it
+                  // reachable without nesting interactive content.
+                  {...(onSelect
+                    ? {
+                        role: 'button',
+                        tabIndex: 0,
+                        onClick: () => onSelect(it.customerId),
+                        onKeyDown: (e: KeyboardEvent) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            onSelect(it.customerId)
+                          }
+                        },
+                      }
+                    : {})}
+                >
                   <div className="tl-head">
                     <span className="tl-channel">{it.channel}</span>
+                    {customerNames?.[it.customerId] && (
+                      <span className="tl-customer">{customerNames[it.customerId]}</span>
+                    )}
                     <time className="tl-time" dateTime={it.createdAt}>
                       {timeLabel(it.createdAt)}
                     </time>
