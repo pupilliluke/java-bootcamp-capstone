@@ -21,6 +21,8 @@ export default function ActivitiesPage({ navigate }: { navigate: Navigate }) {
   const { customers, loading: customersLoading, error: customersError } = useCustomers({
     page: 0,
     size: 100,
+    sort: 'customerId',
+    direction: 'asc',
   })
   const { interactions, loading, error } = useRecentInteractions(customers, FEED_LIMIT)
 

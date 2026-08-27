@@ -48,6 +48,10 @@ describe('ActivitiesPage', () => {
     render(<ActivitiesPage navigate={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText('Sent onboarding pack')).toBeInTheDocument())
+    expect(customersApi.page).toHaveBeenCalledWith(
+      expect.objectContaining({ size: 100, sort: 'customerId', direction: 'asc' }),
+      expect.any(AbortSignal),
+    )
     expect(screen.getByText('Renewal call')).toBeInTheDocument()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()
     expect(screen.getByText('Ravi Singh')).toBeInTheDocument()
