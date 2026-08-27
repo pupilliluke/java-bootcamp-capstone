@@ -19,6 +19,7 @@ public final class InteractionEventFixtures {
                 "CUS-1001",
                 "INT-1001",
                 "EMAIL",
-                "Sent a welcome email");
+                "Sent a welcome email",
+                "agent1");
     }
 }
