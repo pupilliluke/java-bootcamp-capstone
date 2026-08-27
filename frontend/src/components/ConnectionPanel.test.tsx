@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ConnectionPanel from './ConnectionPanel'
 import { healthApi } from '../api/health'
+import { infoApi } from '../api/info'
 import { ApiError } from '../api/ApiError'
 
 vi.mock('../api/health')
+vi.mock('../api/info')
 
 // The shape Actuator returns to an authorized caller, verified against a
 // running backend: components appear only when show-details lets them.
@@ -25,11 +27,31 @@ const HEALTHY = {
   },
 }
 
+// The curated identity block ConnectionInfoContributor serves.
+const INFO = {
+  connections: {
+    profile: 'local',
+    database: 'postgresql://localhost:5432/crm',
+    kafka: {
+      bootstrap: 'localhost:9092',
+      topic: 'crm.interaction.v1',
+      consumerGroup: 'crm-interaction-service-v1',
+    },
+  },
+  build: { artifact: 'crm-backend', version: '0.0.1-SNAPSHOT', time: '2026-08-27T12:00:00Z' },
+  revision: 'ab0faa7deadbeef1234',
+}
+
 const row = (label: string) =>
   screen.getByText(label).nextElementSibling as HTMLElement
 
 describe('ConnectionPanel', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Identity is orthogonal to liveness: most tests get an empty info payload
+    // so they assert health behaviour alone, and the identity tests override.
+    vi.mocked(infoApi.get).mockResolvedValue({})
+  })
 
   it('shows a loading state before the first check returns', () => {
     vi.mocked(healthApi.get).mockReturnValue(new Promise(() => {}))
@@ -58,6 +80,10 @@ describe('ConnectionPanel', () => {
     expect(screen.queryByText(/4054962176/)).not.toBeInTheDocument()
   })
 
+  // A DOWN backend RESOLVES with the component breakdown: the transport treats
+  // Actuator's 503 as data (health.ts treatAsOk), so this fixture is exactly
+  // what healthApi.get delivers when the database is down for real. The
+  // health.test.ts transport test proves that seam; this proves the rendering.
   it('reports a DOWN backend as down rather than as an error', async () => {
     vi.mocked(healthApi.get).mockResolvedValue({
       status: 'DOWN',
@@ -69,15 +95,27 @@ describe('ConnectionPanel', () => {
     expect(within(row('Database')).getByText('DOWN')).toBeInTheDocument()
   })
 
-  it('distinguishes unreachable from unhealthy, and shows the status code', async () => {
+  // With 503 handled as data, a rejection means the backend genuinely did not
+  // answer: network failure (no status), or a status no health endpoint sends.
+  it('reports a network failure as unreachable, without inventing a code', async () => {
     vi.mocked(healthApi.get).mockRejectedValue(
-      new ApiError('Service Unavailable', 'http', 503),
+      new ApiError('Network error — is the backend running?', 'network'),
     )
     render(<ConnectionPanel />)
 
     await waitFor(() => expect(screen.getByText(/unreachable/i)).toBeInTheDocument())
-    expect(screen.getByText(/HTTP 503/)).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent('Service Unavailable')
+    expect(screen.queryByText(/HTTP/)).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/network error/i)
+  })
+
+  it('shows the status code when an unexpected HTTP failure has one', async () => {
+    vi.mocked(healthApi.get).mockRejectedValue(
+      new ApiError('Request failed (HTTP 502)', 'http', 502),
+    )
+    render(<ConnectionPanel />)
+
+    await waitFor(() => expect(screen.getByText(/unreachable/i)).toBeInTheDocument())
+    expect(within(row('Backend')).getByText(/HTTP 502/)).toBeInTheDocument()
   })
 
   // Anonymous callers get UP/DOWN with no components. Behind the login guard
@@ -97,6 +135,31 @@ describe('ConnectionPanel', () => {
 
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
     expect(within(row('Kafka')).getByText(/no health indicator/i)).toBeInTheDocument()
+  })
+
+  it('names the version, revision, profile and database target from info', async () => {
+    vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
+    vi.mocked(infoApi.get).mockResolvedValue(INFO)
+    render(<ConnectionPanel />)
+
+    await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
+    expect(within(row('Backend')).getByText(/v0\.0\.1-SNAPSHOT/)).toBeInTheDocument()
+    expect(within(row('Backend')).getByText(/ab0faa7deadb/)).toBeInTheDocument()
+    expect(within(row('Backend')).getByText(/profile: local/)).toBeInTheDocument()
+    expect(within(row('Database')).getByText(/postgresql:\/\/localhost:5432\/crm/)).toBeInTheDocument()
+    expect(within(row('Kafka')).getByText(/crm\.interaction\.v1/)).toBeInTheDocument()
+    expect(within(row('Kafka')).getByText(/crm-interaction-service-v1/)).toBeInTheDocument()
+  })
+
+  // An older backend without the contributor answers info with nothing, or the
+  // endpoint 404s. The panel keeps working on health alone.
+  it('keeps working when info is unavailable', async () => {
+    vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
+    vi.mocked(infoApi.get).mockRejectedValue(new ApiError('Request failed (HTTP 404)', 'http', 404))
+    render(<ConnectionPanel />)
+
+    await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
+    expect(screen.queryByText(/profile:/)).not.toBeInTheDocument()
   })
 
   it('shows where the UI is served from', async () => {
