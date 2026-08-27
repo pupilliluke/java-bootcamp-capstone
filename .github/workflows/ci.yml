@@ -201,25 +201,6 @@ jobs:
           ./container-structure-test test \
             --image crm-api:test --config backend/container-structure-test.yaml
 
-      # REPORT-ONLY FOR NOW (exit-code 0). Read this before changing it.
-      #
-      # The image currently carries 8 critical and 41 high findings, nearly all
-      # of them from the application's own dependencies rather than the base
-      # image: tomcat-embed-core 10.1.31 alone accounts for 5 critical and 14
-      # high, and spring-security-web 6.3.4 for another critical. They have
-      # fixes available, so ignore-unfixed does not filter them out.
-      #
-      # Set exit-code to 1 and this job fails on every pull request from the
-      # moment it merges, for everyone, over problems no individual pull request
-      # introduced. A gate that is red on the day it lands is a gate the team
-      # learns to ignore, so it starts as a report and becomes a gate once the
-      # findings are dealt with.
-      #
-      # The fix is one line: the spring-boot-starter-parent version in
-      # backend/pom.xml is 3.3.5, from October 2024. Bumping it pulls patched
-      # Tomcat and Spring Security in transitively. Do that first, confirm this
-      # step reports clean, then change exit-code to "1" and delete this comment.
-      #
       # Locally, `docker scout quickview crm-api:test` answers the same question
       # in seconds and needs no database download, which on a home connection is
       # the difference between a usable check and a forty-minute one. Trivy runs

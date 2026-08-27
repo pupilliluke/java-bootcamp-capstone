@@ -28,15 +28,26 @@ public class Interaction {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 
+    // Audit columns, both nullable: rows written before V8 recorded neither, and
+    // the schema stays honest about that rather than backfilling a value nobody
+    // captured. Every new interaction sets both.
+    @Column(name = "correlation_id", length = 100)
+    private String correlationId;
+
+    @Column(name = "created_by", length = 100)
+    private String createdBy;
+
     protected Interaction() {}
 
     public Interaction(String interactionId, String customerId, String channel,
-                       String notes, Instant occurredAt) {
+                       String notes, Instant occurredAt, String correlationId, String createdBy) {
         this.interactionId = interactionId;
         this.customerId = customerId;
         this.channel = channel;
         this.notes = notes;
         this.occurredAt = occurredAt;
+        this.correlationId = correlationId;
+        this.createdBy = createdBy;
     }
 
     public String getInteractionId() { return interactionId; }
@@ -44,6 +55,8 @@ public class Interaction {
     public String getChannel() { return channel; }
     public String getNotes() { return notes; }
     public Instant getOccurredAt() { return occurredAt; }
+    public String getCorrelationId() { return correlationId; }
+    public String getCreatedBy() { return createdBy; }
 
     @Override
     public boolean equals(Object o) {
