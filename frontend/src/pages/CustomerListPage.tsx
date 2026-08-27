@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useCustomers } from '../hooks/useCustomers'
 import type { Navigate } from '../nav'
 import { ALL_CUSTOMER_STATUSES, type CustomerStatus } from '../types/customer'
@@ -43,7 +43,19 @@ export default function CustomerListPage({
     setPage(1)
   }
 
+  // Debounced, because the search box reaches the database now. Firing on every
+  // keystroke would send a query per character.
+  //
+  // The first run is skipped. Without that, mounting the page schedules a timer
+  // that calls setPage(1) a quarter of a second later, having debounced an
+  // empty query that was already empty -- so clicking to page two within that
+  // window bounced the user straight back to page one.
+  const firstRun = useRef(true)
   useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
     const t = setTimeout(() => {
       setDebouncedQuery(query)
       setPage(1) // a new search starts at its own first page, not page nine
