@@ -8,21 +8,28 @@ import { http } from './http'
 // degrade to "not reported" rather than break.
 export interface ConnectionsInfo {
   profile?: string
-  // The deployment's human name (course-cluster, k3d-local); absent on a
-  // laptop, where the profile is the honest answer.
+  // Derived server-side, never declared: "kubernetes: student02" read from
+  // the platform's own namespace mount, or "profile: local" on a laptop.
   environment?: string
+  // Names only, never addresses: the payload identifies the database and the
+  // broker without a single host or port in it.
   database?: string
-  // currentSchema on a shared database -- whose rows these are.
   schema?: string
   kafka?: {
-    bootstrap?: string
     topic?: string
     consumerGroup?: string
   }
 }
 
+export interface RuntimeInfo {
+  java?: { version?: string; vendor?: string }
+  dependencies?: Record<string, string>
+  os?: { name?: string; arch?: string }
+}
+
 export interface InfoResponse {
   connections?: ConnectionsInfo
+  runtime?: RuntimeInfo
   build?: {
     artifact?: string
     version?: string

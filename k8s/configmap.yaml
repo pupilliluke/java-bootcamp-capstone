@@ -19,10 +19,6 @@ data:
   # cluster. A k8s-specific profile would be a third copy of the same three
   # datasource lines with nothing different in it.
   SPRING_PROFILES_ACTIVE: "local"
-  # The human name for this environment, shown by the Settings connection
-  # panel. The profile above names the configuration shape, which every
-  # deployment reuses -- this names the place.
-  CRM_ENVIRONMENT: "k3d-local"
   SERVER_PORT: "8080"
 
   # host.k3d.internal is injected into CoreDNS by k3d and resolves to the host,

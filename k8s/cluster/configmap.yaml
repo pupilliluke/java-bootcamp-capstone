@@ -36,10 +36,6 @@ metadata:
     app: crm-api
 data:
   SPRING_PROFILES_ACTIVE: "local"
-  # The human name for this environment, shown by the Settings connection
-  # panel. The profile above names the configuration shape, which every
-  # deployment reuses -- this names the place.
-  CRM_ENVIRONMENT: "course-cluster"
   SERVER_PORT: "8080"
 
   # The cohort host. swe1 is 100.23.237.198; this is swe2. There is no
