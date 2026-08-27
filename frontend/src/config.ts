@@ -6,9 +6,16 @@ export const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
   '398192114075-fb8j3jdt7m2qrqpe6957g5o57ajppfhn.apps.googleusercontent.com'
 
-// Whether Google Sign-In is loaded at all. On by default; set VITE_ENABLE_GSI=false
-// to keep the Google script and widget out of a build entirely. The Playwright e2e
-// run sets it false: the third-party script and its network calls add nothing to
-// the customer journey under test and only introduce flake. When off, the script is
-// never injected and the button is not rendered.
-export const GSI_ENABLED = import.meta.env.VITE_ENABLE_GSI !== 'false'
+// Whether Google Sign-In is loaded at all. OFF by default (opt-in): the button
+// and its accounts.google.com script are injected only when VITE_ENABLE_GSI is
+// exactly 'true'.
+//
+// The default is off on purpose. Google refuses any serving origin that is not in
+// the OAuth client's "Authorized JavaScript origins" list, returning a full-page
+// "Error 400: origin_mismatch" — so a deploy to a new domain (neuralcrm.xyz, or
+// any *.vercel.app preview) shows a broken button instead of a login. Enable it
+// only in an environment whose exact origin is registered on the client in Google
+// Cloud project 398192114075 — see frontend/README.md. CI and the Playwright e2e
+// run leave it off. When off, the script is never injected and the button is not
+// rendered.
+export const GSI_ENABLED = import.meta.env.VITE_ENABLE_GSI === 'true'
