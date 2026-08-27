@@ -860,3 +860,54 @@ table.data tbody tr:last-child td { border-bottom: none; }
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------------------
+   Connection panel (Settings)
+   A definition list rather than a table: these are label/value pairs, not rows
+   of like things, and a table would promise a structure that is not there.
+--------------------------------------------------------------------------- */
+
+.conn-list {
+  display: grid;
+  grid-template-columns: 9rem 1fr;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  align-items: baseline;
+}
+
+.conn-list dt {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.conn-list dd {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.conn-list dd .muted { font-size: 0.82rem; }
+
+/* The dot carries colour; the word beside it carries the meaning. Colour is
+   never the only signal, so this still reads without it. */
+.conn-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.conn-up { background: var(--green); }
+.conn-down { background: var(--red); }
+.conn-unknown { background: var(--faint); }
+
+@media (max-width: 640px) {
+  .conn-list { grid-template-columns: 1fr; gap: 0.15rem 0; }
+  .conn-list dd { margin-bottom: 0.5rem; }
+}

@@ -31,17 +31,33 @@ export default function DashboardPage({
   const active = useCustomerCount(['ACTIVE'], reloadKey)
   const prospects = useCustomerCount(['PROSPECT'], reloadKey)
 
-  // Sourced from the five customers above, because there is still no endpoint
-  // that reads interactions across customers: useRecentInteractions fans out
-  // per customer, so it can only cover the ones already loaded. This is recent
-  // activity on recently added customers, not on the whole book. A paged
-  // GET /api/v1/interactions collapses it to one call and widens it at once.
+  // The activity feed has its own deterministic customer page. Reusing the
+  // five newest customers above made the seeded Amina and Joe interactions
+  // disappear as soon as newer customers existed. Twelve matches the hook's
+  // bounded fan-out; customerId order keeps the demo customers in that window.
+  const {
+    customers: activityCustomers,
+    loading: activityCustomersLoading,
+    error: activityCustomersError,
+  } = useCustomers({
+    reloadKey,
+    page: 0,
+    size: 12,
+    sort: 'customerId',
+    direction: 'asc',
+  })
+
   const { interactions, loading: activityLoading, error: activityError } =
-    useRecentInteractions(recent)
+    useRecentInteractions(activityCustomers)
 
   // Id -> name, so the feed can say who each interaction belongs to without
   // the timeline component needing to know what a customer is.
-  const customerNames = Object.fromEntries(recent.map((c) => [c.customerId, c.fullName]))
+  const customerNames = Object.fromEntries(
+    activityCustomers.map((c) => [c.customerId, c.fullName]),
+  )
+
+  const activityBusy = activityCustomersLoading || activityLoading
+  const activityFailure = activityCustomersError || activityError
 
   const today = new Date().toDateString()
   const loggedToday = interactions.filter(
@@ -96,9 +112,9 @@ export default function DashboardPage({
 
           <div className="card" style={{ marginTop: '1.1rem' }}>
             <p className="section-title">Recent activity</p>
-            {activityLoading && <div className="spinner-row">Loading activity…</div>}
-            {activityError && <p className="error" role="alert">{activityError}</p>}
-            {!activityLoading && !activityError && interactions.length === 0 && (
+            {activityBusy && <div className="spinner-row">Loading activity…</div>}
+            {activityFailure && <p className="error" role="alert">{activityFailure}</p>}
+            {!activityBusy && !activityFailure && interactions.length === 0 && (
               <p className="empty">
                 No interactions recorded yet. Open a customer and use the Activities tab.
               </p>

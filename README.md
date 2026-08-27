@@ -19,8 +19,9 @@ The hosted UI lives at **<https://www.neuralcrm.xyz>** (Vercel, edge-proxying
 | Docs | Six planning documents in `docs/`, starting with `docs/backlog.md` |
 | Defense, reports | Directories reserved for project material |
 
-**What is not built yet:** the contacts, activities, and reports screens still
-run on demo data — every panel that does carries a "Demo data" tag.
+**What is not built yet:** the contacts and reports screens still run on demo
+data — every panel that does carries a "Demo data" tag. Activities are persisted
+interactions read from the API.
 
 ## Features
 
@@ -32,7 +33,7 @@ the customer data loaded with it.
 - Sign in, sign out, and a sidebar for moving between screens.
 - Dashboard, customer list with paging, customer details, and an add-customer form.
 - Log an interaction and read its persisted history from the customer details screen.
-- Contacts, activities, and reports screens.
+- Contacts and reports screens, plus a real cross-customer activity timeline.
 
 Screens navigate through React state rather than a router library, which keeps
 the dependency list to React alone. The trade is that there are no URLs: the
@@ -43,8 +44,8 @@ Two things are deliberately honest rather than finished:
 - **Editing a customer is disabled.** The form opens and shows a message
   explaining that the API has no `PUT /api/v1/customers` yet, and the save button
   stays greyed out.
-- **Contacts, activities, and reports run on hardcoded data**, because no
-  endpoint serves them. Every panel that does carries a "Demo data" tag so
+- **Contacts and reports run on hardcoded data**, because no endpoint serves
+  them. Every panel that does carries a "Demo data" tag so
   fabricated rows are never mistaken for real ones.
 
 The bearer token is held in memory, not `localStorage`, so a script injected
@@ -58,10 +59,16 @@ from the API clears the session and returns to the login screen.
 - List all customers.
 - Validate incoming customer requests.
 - Return structured errors for missing customers, duplicate customer IDs, and invalid requests.
-- Seed two demo customers on startup: `CUS-1001` and `CUS-1002`.
+- Seed three demo customers on startup: Joe mama (`CUS-1000`), Amina Khan
+  (`CUS-1001`), and Ravi Singh (`CUS-1002`).
 
 Customer rows are durable in PostgreSQL (`V3__customer.sql`); the seeder skips
 any customer that already exists, so restarts neither wipe nor duplicate them.
+
+Four persisted demo interactions give the dashboard and Activities timeline a
+useful initial state. Their fixed IDs make startup idempotent, and they are
+inserted directly rather than published as Kafka events. Set
+`CRM_DEMO_SEED_INTERACTIONS=false` to disable synthetic activity.
 
 ### Kafka interaction messaging
 
