@@ -72,6 +72,7 @@ class InteractionChannelConstraintTest {
     }
 
     private static Interaction interaction(String id, String channel) {
-        return new Interaction(id, "CUS-1001", channel, "constraint probe", Instant.now());
+        return new Interaction(id, "CUS-1001", channel, "constraint probe", Instant.now(),
+                "corr-probe", "agent1");
     }
 }

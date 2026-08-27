@@ -53,7 +53,7 @@ class InteractionServiceTest {
         when(customerService.get("CUS-9999"))
                 .thenThrow(new CustomerNotFoundException("Customer not found: CUS-9999"));
 
-        assertThatThrownBy(() -> service.createAndPublish(request(), "correlation-id"))
+        assertThatThrownBy(() -> service.createAndPublish(request(), "correlation-id", "agent1"))
                 .isInstanceOf(CustomerNotFoundException.class)
                 .hasMessageContaining("CUS-9999");
 

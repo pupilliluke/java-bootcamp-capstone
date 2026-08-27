@@ -31,18 +31,26 @@ public class InteractionService {
     }
 
     @Transactional
-    public InteractionResponseDTO createAndPublish(CreateInteractionRequest request, String correlationId) {
+    public InteractionResponseDTO createAndPublish(
+            CreateInteractionRequest request, String correlationId, String actor) {
         //ensures no misses by capitalization
         String customerId = customerService.get(request.customerId()).customerId();
         String interactionId = "INT-" + UUID.randomUUID();
         Instant occurredAt = Instant.now();
 
+        // The correlation id and the actor are both received, not derived -- the
+        // filter stamped the id and the security context named the user before
+        // this method ran. Persisting them here is what lets the durability
+        // SELECT (customer_id + correlation_id) survive a restart (issue #88) and
+        // records who logged the interaction (issue #86).
         Interaction interaction = interactionRepository.save(new Interaction(
                 interactionId,
                 customerId,
                 request.channel(),
                 request.notes(),
-                occurredAt
+                occurredAt,
+                correlationId,
+                actor
         ));
 
         InteractionEvent event = new InteractionEvent(
@@ -54,7 +62,8 @@ public class InteractionService {
                 customerId, // Kafka message key
                 interactionId,
                 request.channel(),
-                request.notes()
+                request.notes(),
+                actor
         );
         producer.publish(event);
 
