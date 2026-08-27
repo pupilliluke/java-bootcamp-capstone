@@ -1,6 +1,6 @@
 # ADR-004: Password login instead of Microsoft Entra
 
-- **Status:** Proposed | Accepted | Superseded
+- **Status:** Accepted
 - **Date:** 08-25-2026
 - **Deciders:** Chase Bulkin
 - **Related backlog:** Issue #32

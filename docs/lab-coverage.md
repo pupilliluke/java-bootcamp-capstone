@@ -11,10 +11,10 @@ at the defense asks "did you use what you learned?"
 **Key:** `[x]` done · `[~]` partly done · `[ ]` not yet · **(stretch)** unlikely
 in six weeks, and fine to skip
 
-**Where we are: 55 done, 13 partly done, 38 to go, across 53 labs.** Nine of the
-remaining are marked stretch, so the realistic target is closer to 96 than 106.
-Most of what is left sits in Week 5 — containers, pipeline, Kubernetes — which is
-one person's lane and largely independent of the rest.
+**Where we are: 70 done, 11 partly done, 26 to go, across 53 labs.** Seven of
+the remaining are marked stretch, so the realistic target is closer to 100 than
+107. Week 5 delivery has landed; what is left is a mix of observability odds
+and ends, contract polish (#82–#86), and the Lab 52 defense packet.
 
 ---
 
@@ -103,10 +103,14 @@ one person's lane and largely independent of the rest.
 
 ### Lab 19 — Integration and UI testing with Selenium
 - [ ] Browser regression suite **(stretch)**
-- [ ] At least one automated end-to-end journey
+- [x] At least one automated end-to-end journey — Playwright's
+      `customer-journey.spec.ts` runs in CI's e2e job: create a customer, log
+      an interaction, read it back, correlation ids asserted per call
 
 ### Lab 20 — Structured logging
-- [~] Correlation IDs flowing through the log pattern
+- [x] Correlation IDs flowing through the log pattern —
+      `CorrelationIdFilter` fills the MDC for every HTTP request and echoes the
+      id back; `RequestLoggingFilter` writes one line per request carrying it
 - [ ] One correlation ID followed from the browser to the consumer
 
 ### Lab 21 — Observability and monitoring
@@ -130,7 +134,8 @@ one person's lane and largely independent of the rest.
 
 ### Lab 25 — Service and repository layers
 - [x] Repository interfaces separate from business logic
-- [~] Every entity behind a repository, not a map
+- [x] Every entity behind a repository, not a map — customers joined users and
+      interactions on JPA when `V3__customer.sql` landed
 
 ### Lab 26 — Spring profiles and configuration
 - [x] Profiles for local, azure and test
@@ -138,7 +143,8 @@ one person's lane and largely independent of the rest.
 
 ### Lab 27 — Transaction management
 - [~] Read-only transactions on lookups
-- [ ] Write and publish inside one transaction
+- [x] Write and publish inside one transaction — as a deliberate dual write,
+      documented with its failure modes in ADR-008
 
 ### Lab 28 — Spring Security basics
 - [x] Real JWT with issuer, role and expiry
@@ -221,16 +227,22 @@ one person's lane and largely independent of the rest.
       PostgreSQL — see backend/container-structure-test.yaml and the image job
 
 ### Lab 42 — Kubernetes on k3s
-- [ ] Deployment, Service, ConfigMap, Secret and Ingress
-- [ ] Three probes, and a rollback we have actually rehearsed
+- [x] Deployment, Service, ConfigMap, Secret and Ingress — under `k8s/`,
+      namespace-portable, with the Secret created out-of-band
+- [~] Three probes are in the manifest and CI breaks-and-recovers the deploy;
+      the rehearsed rollback recovers from a missing image — a
+      version-to-version rehearsal is still owed
 
 ### Lab 43 — GitHub CI/CD pipeline
 - [x] Every push builds and tests
 - [x] Built once, with an identity we can trace, and no secrets in logs
 
 ### Lab 44 — Continuous delivery and promotion
-- [ ] One artifact promoted between environments, never rebuilt
-- [ ] Objective gates deciding what moves forward
+- [~] One artifact, never rebuilt: the publish job pushes each develop/main
+      build to GHCR by commit SHA and the Deployment pins its digest — but with
+      one environment there is no between-environments promotion yet
+- [x] Objective gates deciding what moves forward — tests, hadolint, structure
+      tests, and Trivy at `exit-code: "1"` gate every merge
 
 ### Lab 45 — Infrastructure as code
 - [ ] Terraform and Ansible sketches **(stretch)**
@@ -250,22 +262,30 @@ one person's lane and largely independent of the rest.
 
 ### Lab 48 — Planning and architecture
 - [x] Architecture written down, backlog and risk register live
-- [~] ADRs and measurable NFRs
+- [x] ADRs and measurable NFRs — ADR-001 to ADR-010 and `docs/nfrs.md`, every
+      target with a metric, method and environment
 
 ### Lab 49 — Backend and messaging slice
-- [~] Validated API and a versioned event — the persistence is missing
-- [ ] Interaction saved before the event is published
+- [x] Validated API, versioned event, and Flyway/JPA persistence — contract
+      polish against the course spec is tracked as #82–#86
+- [x] Interaction saved before the event is published — inside one
+      transaction, as the dual write ADR-008 documents
 
 ### Lab 50 — Frontend and persistence
-- [ ] The agent journey reaching PostgreSQL end to end
-- [ ] Proof the data landed, not just that the screen said so
+- [x] The agent journey reaching PostgreSQL end to end — the Playwright
+      journey creates, records, and reads back through the real API and database
+- [~] Proof the data landed: read-back is asserted in e2e; the SQL-level check
+      and the restart-durability rehearsal are not yet recorded as evidence
 
 ### Lab 51 — Security, CI/CD and deployment
-- [~] JWT and RBAC done; the pipeline, image and cluster are not
-- [ ] Deployed, smoke tested, and rolled back on purpose
+- [x] JWT and RBAC done; pipeline, image, publish, and cluster jobs all real
+- [x] Deployed, smoke tested, broken on purpose, and rolled back — on the k3d
+      cluster in CI (twelve assertions); the shared course-cluster run is still
+      owed pending the k3d-versus-k3s ruling
 
 ### Lab 52 — Final defense
-- [ ] Evidence index, demo script and Q&A notes
+- [~] Evidence index is live and reconciles to the rubric; demo script and Q&A
+      notes do not exist yet
 - [ ] Retrospective and individual reflections
 
 ---
@@ -276,5 +296,5 @@ one person's lane and largely independent of the rest.
 - If something is genuinely not happening, mark it **(stretch)** rather than
   leaving it looking like a failure. A skipped item we named beats a gap someone
   finds for us.
-- The half-ticked lines are the honest ones — 31, 36, 37, 39, 49, 51 — and they
-  are where the most credit is sitting for the least work.
+- The half-ticked lines are the honest ones — 12, 15, 27, 31, 33, 36, 37, 42,
+  44, 50, 52 — and they are where the most credit is sitting for the least work.

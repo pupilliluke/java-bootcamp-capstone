@@ -27,11 +27,11 @@ The repository is public. Anything committed is published.
 | 4 | The container is compromised and runs as root | Non-root UID 10001, `allowPrivilegeEscalation: false`, all capabilities dropped | `readOnlyRootFilesystem` is false |
 | 5 | The base image quietly changes under us | Both `FROM` lines pinned by digest | Bumping is a manual, deliberate commit |
 | 6 | A known CVE ships | Trivy gates the `image` job on HIGH and CRITICAL, over both the OS layer and the fat jar's `BOOT-INF/lib` | Gated, but after a build rather than in the first minute. Runtime dependencies only; test and provided scope are not scanned |
-| 7 | Nobody can tell which build is running | Digest and commit recorded before deploy; OCI revision label carries the commit | The manifest names a mutable tag. See ADR-005 |
+| 7 | Nobody can tell which build is running | Digest and commit recorded before deploy; `k8s/deployment.yaml` pins the published GHCR digest (ADR-005 amendment); OCI revision label carries the commit | Rolling forward is a deliberate manifest commit — the cost the pin was chosen for |
 | 8 | A bad deploy takes the service down | Rolling update keeps the healthy pod; rehearsed rollback | Proven for a missing image, not for a bad working version |
 | 9 | An unauthenticated caller reads customer data | Deny by default; 401 asserted in unit tests and in `k8s/smoke.sh` | — |
 | 10 | A token appears in a log or screenshot | Correlation IDs logged, not tokens; runbook says redact | Manual discipline |
-| 11 | The smoke test runs against a real cluster | Every cluster today is disposable k3d | No guard on the kubectl context. Becomes real the day a hosted cluster exists |
+| 11 | The smoke test runs against a real cluster | `OWN_CLUSTER=0` mode refuses to run without an explicit namespace, ingress and host header | The default mode still trusts the current kubectl context — fine while that context is disposable k3d |
 
 ## Decisions that follow from this
 
@@ -46,4 +46,4 @@ The repository is public. Anything committed is published.
 | Item | Owner | Decision needed |
 | ---- | ----- | --------------- |
 | When to bump the base image digest | Luke | Eight Go defects in the base image's `/usr/bin/pebble` are silenced until 2026-11-26 in `.trivyignore.yaml`. A rebuilt Temurin digest is the fix |
-| Whether to guard `k8s/smoke.sh` on the kubectl context | Luke | Only matters once a non-disposable cluster exists |
+| Whether to guard `k8s/smoke.sh` on the kubectl context | Luke | `OWN_CLUSTER=0` guards the shared-cluster path; whether the default mode should also refuse unfamiliar contexts is still open |
