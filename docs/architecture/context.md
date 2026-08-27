@@ -41,7 +41,7 @@ can run on the same laptop and the boundaries still apply.
 | Participant | Relationship with the CRM | Authentication and trust notes |
 | ----------- | ------------------------- | ------------------------------ |
 | Service agent | Signs in, reads and creates customers, and submits customer interactions. | Login accepts credentials and returns a JWT. Customer and interaction requests require an `AGENT` or `ADMIN` token. All browser input is treated as untrusted and validated by the API. |
-| CRM administrator | Signs in and can use the implemented agent-facing capabilities with the `ADMIN` role. | The role is enforced by backend authorization. `/api/admin/**` is reserved for administrators, but no admin handler exists yet, so this view does not claim any administrative feature beyond the current access rule. |
+| CRM administrator | Signs in and can use the implemented agent-facing capabilities with the `ADMIN` role. | The role is enforced by backend authorization. `/api/v1/admin/**` is reserved for administrators, but no admin handler exists yet, so this view does not claim any administrative feature beyond the current access rule. |
 | Developer / operator | Supplies runtime configuration, starts the application and supporting services, checks health, and reads logs. | This is privileged access because configuration can contain secrets. The basic health response is public; health details require authorization. |
 
 ## What is inside the system boundary

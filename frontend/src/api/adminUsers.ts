@@ -5,7 +5,7 @@ import type {
 } from '../types/user'
 import { http } from './http'
 
-const basePath = '/api/admin/users'
+const basePath = '/api/v1/admin/users'
 
 export const adminUsersApi = {
     list(signal?: AbortSignal): Promise<AdminUser[]> {

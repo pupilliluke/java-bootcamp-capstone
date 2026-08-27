@@ -34,7 +34,7 @@ class ForgedTokenSecurityTest {
 
     @Test
     void aGenuineTokenIsAccepted() throws Exception {
-        mockMvc.perform(get("/api/customers")
+        mockMvc.perform(get("/api/v1/customers")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isOk());
     }
@@ -53,7 +53,7 @@ class ForgedTokenSecurityTest {
                 .signWith(attackerKey, SignatureAlgorithm.HS256)
                 .compact();
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + forged))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -67,7 +67,7 @@ class ForgedTokenSecurityTest {
                         .getBytes(StandardCharsets.UTF_8));
         String forged = header + "." + payload + ".";
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + forged))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -80,7 +80,7 @@ class ForgedTokenSecurityTest {
                 + Base64.getUrlEncoder().withoutPadding()
                         .encodeToString("not-the-real-signature".getBytes(StandardCharsets.UTF_8));
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + tampered))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + tampered))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -98,7 +98,7 @@ class ForgedTokenSecurityTest {
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + expired))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + expired))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -115,14 +115,14 @@ class ForgedTokenSecurityTest {
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + wrongIssuer))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + wrongIssuer))
                 .andExpect(status().isUnauthorized());
     }
 
     // A bearer value that is not a JWT at all is turned away, not met with a 500.
     @Test
     void aBearerHeaderThatIsNotAJwtIsRejected() throws Exception {
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer not.a.jwt"))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer not.a.jwt"))
                 .andExpect(status().isUnauthorized());
     }
 }

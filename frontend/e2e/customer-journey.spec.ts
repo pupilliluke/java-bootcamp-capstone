@@ -59,7 +59,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const loginResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/auth/login' &&
+          new URL(response.url()).pathname === '/api/v1/auth/login' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Sign in', exact: true }).click()
@@ -83,7 +83,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const createResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/customers' &&
+          new URL(response.url()).pathname === '/api/v1/customers' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -113,7 +113,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const interactionResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/interactions' &&
+          new URL(response.url()).pathname === '/api/v1/interactions' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Add Activity', exact: true }).click()
@@ -122,9 +122,11 @@ test('agent can create a customer, log an interaction, and read it back', async 
       expect(interactionResponse.status()).toBe(201)
       expect(await interactionResponse.headerValue('x-correlation-id')).toBeTruthy()
 
-      const sessionRow = page.getByRole('row').filter({ hasText: interactionNotes })
-      await expect(sessionRow).toBeVisible()
-      await expect(sessionRow).toContainText('EMAIL')
+      // The interaction history is a timeline, not a table: each entry is a
+      // list item, so there is no row role to match on.
+      const sessionEntry = page.locator('.tl-item').filter({ hasText: interactionNotes })
+      await expect(sessionEntry).toBeVisible()
+      await expect(sessionEntry).toContainText('EMAIL')
     })
 
     await test.step('Read the interaction back after remounting the customer screen', async () => {
@@ -147,9 +149,9 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       // Navigating away unmounted CustomerDetailsPage and discarded its local
       // `recorded` state. This row can now exist only if the API returned it.
-      const persistedRow = page.getByRole('row').filter({ hasText: interactionNotes })
-      await expect(persistedRow).toBeVisible()
-      await expect(persistedRow).toContainText('EMAIL')
+      const persistedEntry = page.locator('.tl-item').filter({ hasText: interactionNotes })
+      await expect(persistedEntry).toBeVisible()
+      await expect(persistedEntry).toContainText('EMAIL')
     })
   } finally {
     await testInfo.attach('api-journey.json', {
@@ -182,7 +184,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
     apiCalls.some(
       (call) =>
         call.method === 'GET' &&
-        call.path === `/api/customers/${encodeURIComponent(customerId)}/interactions`,
+        call.path === `/api/v1/customers/${encodeURIComponent(customerId)}/interactions`,
     ),
     'the interaction history was read from the nested customer endpoint',
   ).toBe(true)

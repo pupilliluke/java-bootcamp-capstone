@@ -201,25 +201,6 @@ jobs:
           ./container-structure-test test \
             --image crm-api:test --config backend/container-structure-test.yaml
 
-      # REPORT-ONLY FOR NOW (exit-code 0). Read this before changing it.
-      #
-      # The image currently carries 8 critical and 41 high findings, nearly all
-      # of them from the application's own dependencies rather than the base
-      # image: tomcat-embed-core 10.1.31 alone accounts for 5 critical and 14
-      # high, and spring-security-web 6.3.4 for another critical. They have
-      # fixes available, so ignore-unfixed does not filter them out.
-      #
-      # Set exit-code to 1 and this job fails on every pull request from the
-      # moment it merges, for everyone, over problems no individual pull request
-      # introduced. A gate that is red on the day it lands is a gate the team
-      # learns to ignore, so it starts as a report and becomes a gate once the
-      # findings are dealt with.
-      #
-      # The fix is one line: the spring-boot-starter-parent version in
-      # backend/pom.xml is 3.3.5, from October 2024. Bumping it pulls patched
-      # Tomcat and Spring Security in transitively. Do that first, confirm this
-      # step reports clean, then change exit-code to "1" and delete this comment.
-      #
       # Locally, `docker scout quickview crm-api:test` answers the same question
       # in seconds and needs no database download, which on a home connection is
       # the difference between a usable check and a forty-minute one. Trivy runs
@@ -481,13 +462,23 @@ jobs:
           # The check is therefore the image store, never the exit code. Three
           # attempts because the failure is intermittent -- the same commit and
           # the same workflow had passed eleven hours earlier.
+          #
+          # Every k3d and docker call is under `timeout`, because the retry
+          # alone was defeated the first afternoon it ran: on run 33104107576
+          # the import printed success in six seconds and the docker exec that
+          # verifies it then hung for over twenty minutes -- the k3d node's
+          # containerd had wedged, and a call that never returns is a failure
+          # mode no retry loop can see. GNU timeout turns the wedge into exit
+          # code 124, which lands in the same retry path as any other failure.
+          # 180s for the import (a cold one takes about a minute), 30s for
+          # crictl, which answers in under a second when the runtime is healthy.
           for attempt in 1 2 3; do
             # `|| echo` rather than a bare call: the step runs under `bash -e`,
             # so a non-zero k3d would abort here and skip the retry entirely.
             # The exit code is not the signal anyway -- the image store is.
-            k3d image import crm-api:dev -c ci \
-              || echo "k3d exited non-zero on attempt ${attempt}" >&2
-            if docker exec k3d-ci-server-0 crictl images | grep crm-api; then
+            timeout 180 k3d image import crm-api:dev -c ci \
+              || echo "k3d exited non-zero or timed out on attempt ${attempt}" >&2
+            if timeout 30 docker exec k3d-ci-server-0 crictl images | grep crm-api; then
               echo "crm-api is in the node image store (attempt ${attempt})"
               exit 0
             fi
@@ -497,9 +488,10 @@ jobs:
 
           # Dump what the node actually holds. Without this a failure here says
           # only that grep found nothing, which is the least useful half of the
-          # answer.
+          # answer. Guarded, because a wedged runtime hangs this call too, and
+          # dying while gathering evidence is the worst outcome available.
           echo "crm-api never reached the node image store after 3 attempts" >&2
-          docker exec k3d-ci-server-0 crictl images >&2
+          timeout 30 docker exec k3d-ci-server-0 crictl images >&2 || true
           exit 1
 
       # `bash k8s/smoke.sh` rather than `./k8s/smoke.sh`. The script is authored on

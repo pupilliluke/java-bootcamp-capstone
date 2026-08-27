@@ -1,9 +1,7 @@
 import type { Navigate, Page } from '../nav'
 import {
   IconActivities,
-  IconContacts,
   IconDashboard,
-  IconReports,
   IconSettings,
   IconUserPlus,
   IconUsers,
@@ -36,23 +34,16 @@ const ITEMS: NavItem[] = [
     page: { name: 'add' },
     Icon: IconUserPlus,
   },
-  {
-    key: 'contacts',
-    label: 'Contacts',
-    page: { name: 'contacts' },
-    Icon: IconContacts,
-  },
+  // Contacts and Reports are intentionally absent from the sidebar (issue #102):
+  // both pages render hardcoded mock data with no backend behind them, so they
+  // are left unreachable from the nav rather than shown to a demo panel. The
+  // pages and routes still exist; only the links are removed. Activities stays
+  // -- it was rewired to real interactions in #111.
   {
     key: 'activities',
     label: 'Activities',
     page: { name: 'activities' },
     Icon: IconActivities,
-  },
-  {
-    key: 'reports',
-    label: 'Reports',
-    page: { name: 'reports' },
-    Icon: IconReports,
   },
   {
     key: 'admin-users',
