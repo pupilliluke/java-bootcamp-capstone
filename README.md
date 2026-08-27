@@ -206,43 +206,32 @@ so the schema and every row go with it.
 
 ## Run it on the course cluster
 
-The backend deploys to the shared k3s cluster, one namespace per student; the
-UI stays on your laptop and proxies to it. The full record — what runs where,
-verification evidence, the access model, and the demo-day pre-flight — is
+Backend on the shared k3s cluster (one namespace per student), UI on your
+laptop proxying to it. Full record, evidence, and demo pre-flight:
 `docs/course-cluster-deployment.md`.
 
 ### Deploy
 
-One gitignored file carries your identity, so the tracked files carry
-nobody's:
-
-1. `Copy-Item k8s/cluster.env.example .env.cluster` (at the repository root)
-2. Fill it from your row of the credentials sheet — kubeconfig path with
-   forward slashes, DB password, a generated `JWT_SECRET`, your
-   `crm-studentNN.<host>.nip.io` ingress host, and the published image digest
-   from the `publish` job's run summary
+1. `Copy-Item k8s/cluster.env.example .env.cluster`
+2. Fill `.env.cluster` from your row of the credentials sheet
 3. `bash k8s/cluster-deploy.sh`
 
-The script creates the Secret only if absent (rotation is a deliberate
-delete-and-rerun, never an accidental overwrite), applies the manifests with
-the `k8s/cluster/configmap.yaml` overlay, patches your per-student values,
-pins the image digest, and polls readiness through the ingress. Safe to
-re-run.
+Safe to re-run: the Secret is created only if absent, everything else is
+apply/patch.
 
 ### View it
 
-Point the local UI at your deployment. The browser keeps talking to
-localhost and Vite forwards `/api` server-side, so CORS never enters the
-picture:
+1. `Set-Content frontend/.env.local 'VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io'`
+2. `npm --prefix frontend run dev`
+3. Open <http://localhost:5173> and sign in with the demo accounts below
 
-1. Create `frontend/.env.local` containing
-   `VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io`
-2. `npm --prefix frontend run dev`, open <http://localhost:5173>, and sign in
-   with the demo accounts below
+The browser stays on localhost and Vite forwards `/api` server-side, so CORS
+never enters the picture.
 
-Watch the backend from terminals — students have no SSH; `kubectl` against
-the cluster API *is* the terminal on the backend. Set `KUBECONFIG` to your
-`studentNN.yaml` once per shell:
+### Watch it
+
+Students have no SSH — `kubectl` against the cluster API *is* the terminal on
+the backend. Set `KUBECONFIG` to your `studentNN.yaml` once per shell, then:
 
 | What | Command |
 | ---- | ------- |
@@ -252,15 +241,14 @@ the cluster API *is* the terminal on the backend. Set `KUBECONFIG` to your
 | Your schema in SQL | `psql -h 100.22.136.97 -U studentNN -d bootcamp` |
 | Your Kafka topic, live | `docker run --rm edenhill/kcat:1.7.1 -b 100.22.136.97:9092 -t studentNN.crm.interaction.v1 -C -o beginning` |
 
-Record an interaction in the UI with the log window open: the same
-correlation id appears on the HTTP request line and, a moment later, on the
-Kafka consumer line.
+Record an interaction in the UI with the log window open: one correlation id,
+on the HTTP request line and the Kafka consumer line.
 
 ### Break and recover
 
-The rollback rehearsal — a deliberately bad image that never reaches a user,
-undone with one `kubectl rollout undo` — is documented with dated evidence
-in `docs/rollback-runbook.md`. Rehearse it before demo day, never during.
+Rehearsed with dated evidence in `docs/rollback-runbook.md` — a bad image
+that never reaches a user, undone with one `kubectl rollout undo`. Rehearse
+before demo day, never during.
 
 ## API endpoints
 
