@@ -33,7 +33,7 @@ class CustomerControllerTest {
 
     @Test
     void anonymousUpdateIsUnauthorized() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
                 .andExpect(status().isUnauthorized());
@@ -41,7 +41,7 @@ class CustomerControllerTest {
 
     @Test
     void anonymousDeleteIsUnauthorized() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001"))
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -54,7 +54,7 @@ class CustomerControllerTest {
     //
     @Test
     void updateWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -63,24 +63,24 @@ class CustomerControllerTest {
 
     @Test
     void deleteWithATokenForAnUnknownUserIsUnauthorized() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001")
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("viewer1", "VIEWER")))
                 .andExpect(status().isUnauthorized());
     }
 
     // The difference between 401 and 403 in one pair of tests: agent1 is a real,
     // enabled account and is told who they are — they simply may not do this.
-    // Deleting is admin-only; everything else on /api/customers is not.
+    // Deleting is admin-only; everything else on /api/v1/customers is not.
     @Test
     void agentIsForbiddenFromDeletingACustomer() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-1001")
+        mockMvc.perform(delete("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void agentCanUpdateAnExistingCustomer() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-1001")
+        mockMvc.perform(put("/api/v1/customers/CUS-1001")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -92,7 +92,7 @@ class CustomerControllerTest {
 
     @Test
     void updatingAnUnknownCustomerIsNotFound() throws Exception {
-        mockMvc.perform(put("/api/customers/CUS-9999")
+        mockMvc.perform(put("/api/v1/customers/CUS-9999")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(UPDATE_BODY))
@@ -104,11 +104,11 @@ class CustomerControllerTest {
         String token = jwtService.issueToken("admin1", "ADMIN");
         String customerId = createCustomer(token);
 
-        mockMvc.perform(delete("/api/customers/" + customerId)
+        mockMvc.perform(delete("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/customers/" + customerId)
+        mockMvc.perform(get("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
@@ -118,7 +118,7 @@ class CustomerControllerTest {
     // lookup it is meant to test.
     @Test
     void deletingAnUnknownCustomerIsNotFound() throws Exception {
-        mockMvc.perform(delete("/api/customers/CUS-9999")
+        mockMvc.perform(delete("/api/v1/customers/CUS-9999")
                         .header("Authorization", "Bearer " + jwtService.issueToken("admin1", "ADMIN")))
                 .andExpect(status().isNotFound());
     }
@@ -138,7 +138,7 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
@@ -151,13 +151,13 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Case Study", randomEmail(), "CLOSED")))
                 .andExpect(status().isOk());
 
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Renamed While Closed", randomEmail(), "CLOSED")))
@@ -178,12 +178,12 @@ class CustomerControllerTest {
         String agent = jwtService.issueToken("agent1", "AGENT");
         String customerId = createCustomer(agent);
 
-        mockMvc.perform(get("/api/customers/" + customerId.toLowerCase())
+        mockMvc.perform(get("/api/v1/customers/" + customerId.toLowerCase())
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerId").value(customerId));
 
-        mockMvc.perform(get("/api/customers/" + customerId)
+        mockMvc.perform(get("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + agent))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerId").value(customerId));
@@ -221,7 +221,7 @@ class CustomerControllerTest {
         String open = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "");
+        String body = listWith(agent, "?size=100");
 
         assertThat(statusesIn(body)).doesNotContain("CLOSED");
         assertThat(idsIn(body)).contains(open).doesNotContain(closed);
@@ -233,7 +233,7 @@ class CustomerControllerTest {
         String open = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "?status=CLOSED");
+        String body = listWith(agent, "?status=CLOSED&size=100");
 
         assertThat(statusesIn(body)).containsOnly("CLOSED");
         assertThat(idsIn(body)).contains(closed).doesNotContain(open);
@@ -247,10 +247,86 @@ class CustomerControllerTest {
         String active = createCustomer(agent);
         String closed = closedCustomer(agent);
 
-        String body = listWith(agent, "?status=ACTIVE&status=CLOSED");
+        String body = listWith(agent, "?status=ACTIVE&status=CLOSED&size=100");
 
         assertThat(statusesIn(body)).containsOnly("ACTIVE", "CLOSED");
         assertThat(idsIn(body)).contains(active, closed);
+    }
+
+    // --- paging (Lab 39: bounded Pageable, sort allow-list) ----------------
+
+    // The cap is the point: a caller asking for everything gets a page, not the
+    // whole book. Without it one request can pull every row in the database.
+    @Test
+    void oversizedPageRequestIsCappedRatherThanHonoured() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        String body = listWith(agent, "?size=100000");
+
+        assertThat((int) JsonPath.read(body, "$.size")).isEqualTo(100);
+    }
+
+    // Page metadata is what lets the UI render a pager without a second call.
+    @Test
+    void pageResponseCarriesTheTotalsAPagerNeeds() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+        createCustomer(agent);
+
+        String body = listWith(agent, "?page=0&size=1");
+
+        assertThat((int) JsonPath.read(body, "$.page")).isZero();
+        assertThat((int) JsonPath.read(body, "$.size")).isEqualTo(1);
+        assertThat(((Number) JsonPath.read(body, "$.totalElements")).longValue()).isGreaterThanOrEqualTo(2);
+        assertThat((int) JsonPath.read(body, "$.totalPages")).isGreaterThanOrEqualTo(2);
+        assertThat(idsIn(body)).hasSize(1);
+    }
+
+    // A page past the end is an empty page, not an error: deleting the last
+    // customer on page nine should not turn the next refresh into a 500.
+    @Test
+    void pageBeyondTheEndIsEmptyRatherThanAnError() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        String body = listWith(agent, "?page=9999&size=20");
+
+        assertThat(idsIn(body)).isEmpty();
+    }
+
+    // Sort is an allow-list. An unknown property is the caller's mistake, so
+    // 400 -- letting it reach JPA as a property path would surface as a 500.
+    @Test
+    void unknownSortPropertyIsRejectedAsABadRequest() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+
+        mockMvc.perform(get("/api/v1/customers?sort=passwordHash")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void allowedSortPropertyIsAccepted() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        createCustomer(agent);
+
+        mockMvc.perform(get("/api/v1/customers?sort=fullName&direction=desc")
+                        .header("Authorization", "Bearer " + agent))
+                .andExpect(status().isOk());
+    }
+
+    // Search runs in the database, not the browser: filtering a page
+    // client-side only ever searches the rows that page happens to hold.
+    @Test
+    void searchMatchesAcrossTheWholeBookNotJustOnePage() throws Exception {
+        String agent = jwtService.issueToken("agent1", "AGENT");
+        String wanted = createNamed(agent, "Zzyzx Findable");
+        for (int i = 0; i < 3; i++) createCustomer(agent);
+
+        String body = listWith(agent, "?q=zzyzx&size=5");
+
+        assertThat(idsIn(body)).containsExactly(wanted);
     }
 
     // 400 rather than 500. Nothing in CustomerController produces this: Spring
@@ -260,24 +336,26 @@ class CustomerControllerTest {
     // this is here to fail if the handler is ever removed.
     @Test
     void anUnknownStatusValueIsBadRequest() throws Exception {
-        mockMvc.perform(get("/api/customers?status=VIP")
+        mockMvc.perform(get("/api/v1/customers?status=VIP")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isBadRequest());
     }
 
     private String listWith(String token, String query) throws Exception {
-        return mockMvc.perform(get("/api/customers" + query)
+        return mockMvc.perform(get("/api/v1/customers" + query)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
     }
 
     private static List<String> idsIn(String body) {
-        return JsonPath.read(body, "$[*].customerId");
+        // The list endpoint pages, so the rows are under content rather than at
+        // the root of the response.
+        return JsonPath.read(body, "$.content[*].customerId");
     }
 
     private static List<String> statusesIn(String body) {
-        return JsonPath.read(body, "$[*].status");
+        return JsonPath.read(body, "$.content[*].status");
     }
 
     // Created and then closed through update(), because that is how a customer
@@ -285,7 +363,7 @@ class CustomerControllerTest {
     // carries a fresh email for the same reason createCustomer does.
     private String closedCustomer(String token) throws Exception {
         String customerId = createCustomer(token);
-        mockMvc.perform(put("/api/customers/" + customerId)
+        mockMvc.perform(put("/api/v1/customers/" + customerId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(bodyWithStatus("Closed Customer", randomEmail(), "CLOSED")))
@@ -297,12 +375,23 @@ class CustomerControllerTest {
     // declares uq_customer_email — a shared address makes the second insert a
     // 409, and customer_id is no longer available to derive one from.
     private String createCustomer(String token) throws Exception {
-        String body = mockMvc.perform(post("/api/customers")
+        String body = mockMvc.perform(post("/api/v1/customers")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"fullName":"Case Study","email":"%s","phone":"555-0000","status":"ACTIVE"}
                                 """.formatted(randomEmail())))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(body, "$.customerId");
+    }
+
+    // Same as createCustomer, with a name the search test can look for.
+    private String createNamed(String token, String fullName) throws Exception {
+        String body = mockMvc.perform(post("/api/v1/customers")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(bodyWithStatus(fullName, randomEmail(), "ACTIVE")))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return JsonPath.read(body, "$.customerId");

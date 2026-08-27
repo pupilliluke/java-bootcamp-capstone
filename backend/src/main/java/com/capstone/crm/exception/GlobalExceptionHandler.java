@@ -84,7 +84,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * A path variable that will not convert - /api/admin/users/abc reaching a
+     * A path variable that will not convert - /api/v1/admin/users/abc reaching a
      * handler that wants a Long. Without this the catch-all below answers 500,
      * which tells an operator "we broke" when the truth is "you asked for
      * something that is not a number".
@@ -97,6 +97,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
         return build(HttpStatus.BAD_REQUEST, "Malformed request body");
+    }
+
+    /**
+     * A sort property outside the allow-list is the caller's mistake, so 400.
+     *
+     * <p>Letting it through would reach JPA as a property path and fail as a
+     * 500, which reads as a server fault for what is a bad parameter. The
+     * allowed set is named in the message: those field names appear in every
+     * customer response already, so listing them leaks nothing and saves a
+     * round of guessing.
+     */
+    @ExceptionHandler(InvalidSortException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidSort(InvalidSortException ex) {
+        return build(HttpStatus.BAD_REQUEST,
+                ex.getMessage() + ". Sortable fields: " + String.join(", ", ex.getAllowed()));
     }
 
     @ExceptionHandler(Exception.class)

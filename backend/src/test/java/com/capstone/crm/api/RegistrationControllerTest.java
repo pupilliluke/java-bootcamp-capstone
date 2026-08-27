@@ -40,7 +40,7 @@ class RegistrationControllerTest {
 
     @Test
     void anonymousCanRegisterAndTheAccountStartsDisabled() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(NEW_ACCOUNT))
                 .andExpect(status().isCreated())
@@ -66,7 +66,7 @@ class RegistrationControllerTest {
     void aRegisteredButUnapprovedAccountCannotSignIn() throws Exception {
         register();
 
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"hopeful-agent","password":"correct-horse-battery"}
@@ -78,7 +78,7 @@ class RegistrationControllerTest {
     void theRoleCannotBeChosenByTheCaller() throws Exception {
         // An extra "role" field is not part of the contract; the account must
         // still come out as an AGENT rather than an ADMIN.
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -100,7 +100,7 @@ class RegistrationControllerTest {
     void rejectsADuplicateUsername() throws Exception {
         register();
 
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(NEW_ACCOUNT))
                 .andExpect(status().isConflict());
@@ -108,7 +108,7 @@ class RegistrationControllerTest {
 
     @Test
     void rejectsAPasswordShorterThanTwelveCharacters() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -126,11 +126,11 @@ class RegistrationControllerTest {
         Long pendingId = users.findByUsername("hopeful-agent").orElseThrow().getId();
         String agentToken = login("agent1", "agent1");
 
-        mockMvc.perform(patch("/api/admin/users/{userId}/enable", pendingId)
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/enable", pendingId)
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(get("/api/admin/users/pending")
+        mockMvc.perform(get("/api/v1/admin/users/pending")
                         .header("Authorization", "Bearer " + agentToken))
                 .andExpect(status().isForbidden());
     }
@@ -140,7 +140,7 @@ class RegistrationControllerTest {
         register();
         Long pendingId = users.findByUsername("hopeful-agent").orElseThrow().getId();
 
-        mockMvc.perform(patch("/api/admin/users/{userId}/enable", pendingId))
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/enable", pendingId))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -150,18 +150,18 @@ class RegistrationControllerTest {
         Long pendingId = users.findByUsername("hopeful-agent").orElseThrow().getId();
         String adminToken = login("admin1", "admin1");
 
-        mockMvc.perform(get("/api/admin/users/pending")
+        mockMvc.perform(get("/api/v1/admin/users/pending")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.username == 'hopeful-agent')]").exists());
 
-        mockMvc.perform(patch("/api/admin/users/{userId}/enable", pendingId)
+        mockMvc.perform(patch("/api/v1/admin/users/{userId}/enable", pendingId)
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.enabled").value(true));
 
         // The whole point of the issue: approval is what turns a 401 into a 200.
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"hopeful-agent","password":"correct-horse-battery"}
@@ -170,21 +170,21 @@ class RegistrationControllerTest {
                 .andExpect(jsonPath("$.role").value("AGENT"));
 
         // ...and once approved it leaves the queue.
-        mockMvc.perform(get("/api/admin/users/pending")
+        mockMvc.perform(get("/api/v1/admin/users/pending")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.username == 'hopeful-agent')]").doesNotExist());
     }
 
     private void register() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
+        mockMvc.perform(post("/api/v1/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(NEW_ACCOUNT))
                 .andExpect(status().isCreated());
     }
 
     private String login(String username, String password) throws Exception {
-        String body = mockMvc.perform(post("/api/auth/login")
+        String body = mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"" + username + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk())

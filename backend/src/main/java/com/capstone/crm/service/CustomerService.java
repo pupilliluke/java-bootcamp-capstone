@@ -4,12 +4,18 @@ import com.capstone.crm.api.dto.CustomerMapper;
 import com.capstone.crm.api.dto.CustomerRequestDTO;
 import com.capstone.crm.api.dto.CustomerResponseDTO;
 import com.capstone.crm.api.dto.CustomerUpdateDTO;
+import com.capstone.crm.api.dto.PageResponse;
 import com.capstone.crm.entity.Customer;
 import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.exception.CustomerNotFoundException;
+import com.capstone.crm.exception.InvalidSortException;
 import com.capstone.crm.repository.CustomerRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -23,7 +29,7 @@ public class CustomerService {
 
     private static final Logger log = LoggerFactory.getLogger(CustomerService.class);
 
-    // What GET /api/customers answers with when the caller names no status.
+    // What GET /api/v1/customers answers with when the caller names no status.
     //
     // complementOf rather than an explicit EnumSet.of(ACTIVE, SUSPENDED,
     // PROSPECT): a status added to CustomerStatus later then joins the default
@@ -33,6 +39,19 @@ public class CustomerService {
     // of bug to notice.
     private static final Set<CustomerStatus> DEFAULT_STATUSES =
             EnumSet.complementOf(EnumSet.of(CustomerStatus.CLOSED));
+
+    // Paging bounds. A client asking for size=100000 gets 100, because the
+    // request that costs the most is the one nobody meant to send.
+    static final int MAX_PAGE_SIZE = 100;
+    static final int DEFAULT_PAGE_SIZE = 20;
+
+    // Sort is an allow-list, not whatever the client names. `sort` reaches JPA
+    // as a property path, so an open one lets a caller order by any mapped
+    // field and probe the model through response ordering. Unknown fields are
+    // refused rather than quietly ignored: silently sorting by something else
+    // is worse than saying no.
+    private static final Set<String> SORTABLE =
+            Set.of("customerId", "fullName", "email", "status", "createdAt");
 
     private final CustomerRepository customerRepository;
 
@@ -77,6 +96,54 @@ public class CustomerService {
         return customerRepository.findByStatusIn(effective).stream()
                 .map(CustomerMapper::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * One page of customers matching the status filter.
+     *
+     * <p>The list page used to fetch every customer and slice it in the
+     * browser, which meant a thousand-row book crossed the wire in full to show
+     * eight of them.
+     */
+    public PageResponse<CustomerResponseDTO> list(
+            Set<CustomerStatus> statuses, String q, int page, int size, String sort, String direction) {
+
+        Set<CustomerStatus> effective =
+                (statuses == null || statuses.isEmpty()) ? DEFAULT_STATUSES : statuses;
+
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
+                sortOrThrow(sort, direction));
+
+        Page<Customer> found = (q == null || q.isBlank())
+                ? customerRepository.findByStatusIn(effective, pageable)
+                : customerRepository.search(effective, q.trim(), pageable);
+
+        return PageResponse.of(found, CustomerMapper::toResponse);
+    }
+
+    /**
+     * Builds the sort, refusing any property outside the allow-list.
+     *
+     * <p>customerId is appended as a tie-breaker on every sort but its own.
+     * Without it, rows sharing a value -- and status has four values across the
+     * whole book -- come back in whatever order the database chose this time,
+     * so paging through a sorted list can show the same customer twice and
+     * never show another. The tie-breaker is what makes the page boundaries
+     * stable between requests.
+     */
+    private Sort sortOrThrow(String sort, String direction) {
+        String property = (sort == null || sort.isBlank()) ? "customerId" : sort;
+        if (!SORTABLE.contains(property)) {
+            throw new InvalidSortException(property, SORTABLE);
+        }
+        Sort.Direction dir = "desc".equalsIgnoreCase(direction)
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+
+        Sort primary = Sort.by(dir, property);
+        return "customerId".equals(property) ? primary : primary.and(Sort.by("customerId"));
     }
 
     public CustomerResponseDTO update(String customerId, CustomerUpdateDTO request) {
