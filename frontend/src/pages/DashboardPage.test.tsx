@@ -21,25 +21,25 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('DashboardPage', () => {
   it('shows a loading state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: true, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: true, error: null })
     renderPage()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
   })
 
   it('shows an error state', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: 'Network error' })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: 'Network error' })
     renderPage()
     expect(screen.getByText(/is the backend running/i)).toBeInTheDocument()
   })
 
   it('shows an empty state when there are no customers', () => {
-    mockUseCustomers.mockReturnValue({ customers: [], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [], totalElements: 0, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText(/no customers yet/i)).toBeInTheDocument()
   })
 
   it('renders KPIs and recent customers when populated', () => {
-    mockUseCustomers.mockReturnValue({ customers: [customer], loading: false, error: null })
+    mockUseCustomers.mockReturnValue({ customers: [customer], totalElements: [customer].length, totalPages: 1, loading: false, error: null })
     renderPage()
     expect(screen.getByText('Total Customers')).toBeInTheDocument()
     expect(screen.getByText('Amina Khan')).toBeInTheDocument()

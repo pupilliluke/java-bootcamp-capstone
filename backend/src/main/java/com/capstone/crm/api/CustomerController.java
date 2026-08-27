@@ -2,6 +2,7 @@ package com.capstone.crm.api;
 
 import com.capstone.crm.api.dto.CustomerRequestDTO;
 import com.capstone.crm.api.dto.CustomerResponseDTO;
+import com.capstone.crm.api.dto.PageResponse;
 import com.capstone.crm.api.dto.CustomerUpdateDTO;
 import com.capstone.crm.entity.CustomerStatus;
 import com.capstone.crm.service.CustomerService;
@@ -18,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Set;
 
 @RestController
@@ -53,10 +53,23 @@ public class CustomerController {
      * answers as Bad Request. CustomerControllerTest pins that, since it is a
      * behaviour this endpoint depends on rather than one it states.
      */
+    /**
+     * One page of customers.
+     *
+     * <p>Every parameter has a default, so {@code GET /api/customers} still
+     * answers without any of them -- but it now answers with the first page
+     * rather than the whole book. size is capped in the service; sort is an
+     * allow-list and an unknown property is a 400.
+     */
     @GetMapping
-    public ResponseEntity<List<CustomerResponseDTO>> list(
-            @RequestParam(name = "status", required = false) Set<CustomerStatus> status) {
-        return ResponseEntity.ok(customerService.list(status));
+    public ResponseEntity<PageResponse<CustomerResponseDTO>> list(
+            @RequestParam(name = "status", required = false) Set<CustomerStatus> status,
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            @RequestParam(name = "sort", required = false) String sort,
+            @RequestParam(name = "direction", required = false) String direction) {
+        return ResponseEntity.ok(customerService.list(status, q, page, size, sort, direction));
     }
 
     @PutMapping("/{customerId}")
