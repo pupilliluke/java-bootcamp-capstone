@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -87,5 +88,43 @@ class InteractionControllerTest {
                                 + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Customer not found: CUS-9999"));
+    }
+
+    // The lab 49/50 named failure path: invalid value -> 400, no row, no event.
+    // "FAX" is under the old 50-character limit, so before the channel became a
+    // closed set this request was accepted, stored and published.
+    @Test
+    void unknownChannelIsRejectedWithNoRowAndNoEvent() throws Exception {
+        mockMvc.perform(post("/api/interactions")
+                        .header("Authorization", "Bearer "
+                                + jwtService.issueToken("agent1", "AGENT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"CUS-1001","channel":"FAX","notes":"n"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Validation failed: channel - must be one of PHONE, EMAIL, CHAT; "));
+
+        assertThat(interactions.count()).isZero();
+        verifyNoInteractions(producer);
+    }
+
+    // Case matters: the database CHECK is case-sensitive, so accepting "email"
+    // at the API would store a row the constraint refuses. Refuse it here, at
+    // the door, with the same field error as any other unknown value.
+    @Test
+    void lowercaseChannelIsRejected() throws Exception {
+        mockMvc.perform(post("/api/interactions")
+                        .header("Authorization", "Bearer "
+                                + jwtService.issueToken("agent1", "AGENT"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerId":"CUS-1001","channel":"email","notes":"n"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        assertThat(interactions.count()).isZero();
+        verifyNoInteractions(producer);
     }
 }
