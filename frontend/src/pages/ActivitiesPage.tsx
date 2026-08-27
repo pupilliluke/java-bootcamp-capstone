@@ -21,7 +21,7 @@ export default function ActivitiesPage({ navigate }: { navigate: Navigate }) {
         </div>
         <p className="muted" style={{ marginTop: 0 }}>
           To record a real interaction, open a customer → Activities tab (posts to{' '}
-          <code>/api/interactions</code>).
+          <code>/api/v1/interactions</code>).
         </p>
         <div className="table-wrap">
           <table className="data">

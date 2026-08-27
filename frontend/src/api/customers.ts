@@ -13,7 +13,7 @@ export interface ListOptions {
 
 // Matches the Lab 49 backend contract (CustomerController).
 export const customersApi = {
-  // GET /api/customers is paged: the response is a PageResponse, not an array,
+  // GET /api/v1/customers is paged: the response is a PageResponse, not an array,
   // and the server caps size at 100 whatever is asked for.
   page(opts: ListOptions = {}, signal?: AbortSignal): Promise<PageResponse<Customer>> {
     const params = new URLSearchParams()
@@ -26,7 +26,7 @@ export const customersApi = {
     if (opts.sort) params.set('sort', opts.sort)
     if (opts.direction) params.set('direction', opts.direction)
     const query = params.toString()
-    return http<PageResponse<Customer>>(`/api/customers${query ? `?${query}` : ''}`, {}, signal)
+    return http<PageResponse<Customer>>(`/api/v1/customers${query ? `?${query}` : ''}`, {}, signal)
   },
 
   // How many customers match a filter, without pulling any of them back. Asks
@@ -37,20 +37,20 @@ export const customersApi = {
     return page.totalElements
   },
   get(customerId: string, signal?: AbortSignal): Promise<Customer> {
-    return http<Customer>(`/api/customers/${encodeURIComponent(customerId)}`, {}, signal)
+    return http<Customer>(`/api/v1/customers/${encodeURIComponent(customerId)}`, {}, signal)
   },
   create(body: CreateCustomer, signal?: AbortSignal): Promise<Customer> {
-    return http<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(body) }, signal)
+    return http<Customer>('/api/v1/customers', { method: 'POST', body: JSON.stringify(body) }, signal)
   },
   update(customerId: string, body: CustomerUpdate, signal?: AbortSignal): Promise<Customer> {
     return http<Customer>(
-        `/api/customers/${encodeURIComponent(customerId)}`,
+        `/api/v1/customers/${encodeURIComponent(customerId)}`,
         { method: 'PUT', body: JSON.stringify(body) },
         signal,
     )
   },
   // Soft delete, probably will stay this way
   remove(customerId: string, signal?: AbortSignal): Promise<void> {
-    return http<void>(`/api/customers/${encodeURIComponent(customerId)}`, { method: 'DELETE' }, signal)
+    return http<void>(`/api/v1/customers/${encodeURIComponent(customerId)}`, { method: 'DELETE' }, signal)
   },
 }

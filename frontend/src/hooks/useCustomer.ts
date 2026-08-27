@@ -3,7 +3,7 @@ import { customersApi } from '../api/customers'
 import { ApiError } from '../api/ApiError'
 import type { Customer } from '../types/customer'
 
-// Loads a single customer by id (GET /api/customers/{id}).
+// Loads a single customer by id (GET /api/v1/customers/{id}).
 export function useCustomer(customerId: string) {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)

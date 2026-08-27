@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge'
 import { IconUsers } from '../components/icons'
 import type { Navigate } from '../nav'
 
-// Real dashboard: every number here is derived from GET /api/customers.
+// Real dashboard: every number here is derived from GET /api/v1/customers.
 export default function DashboardPage({
   navigate,
   reloadKey,

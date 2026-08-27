@@ -14,7 +14,7 @@ interface InteractionResponse {
 export const interactionsApi = {
   async create(body: CreateInteraction, signal?: AbortSignal): Promise<Interaction> {
     const event = await http<InteractionResponse>(
-      '/api/interactions',
+      '/api/v1/interactions',
       { method: 'POST', body: JSON.stringify(body) },
       signal,
     )
@@ -23,7 +23,7 @@ export const interactionsApi = {
 
   async list(customerId: string, signal?: AbortSignal): Promise<Interaction[]> {
     const interactions = await http<InteractionResponse[]>(
-      `/api/customers/${encodeURIComponent(customerId)}/interactions`,
+      `/api/v1/customers/${encodeURIComponent(customerId)}/interactions`,
       {},
       signal,
     )

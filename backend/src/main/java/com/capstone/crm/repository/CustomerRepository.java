@@ -18,7 +18,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
     @Query(value = "SELECT nextval('customer_number_seq')", nativeQuery = true)
     long nextCustomerNumber();
 
-    // Backs the status filter on GET /api/customers. Derived from the method
+    // Backs the status filter on GET /api/v1/customers. Derived from the method
     // name rather than written as @Query: "WHERE status IN (:statuses)" is the
     // entire statement, so a hand-written one would add a string to keep in
     // step with the field name and buy nothing.
@@ -28,7 +28,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
     // parameter type deciding that for them.
     List<Customer> findByStatusIn(Collection<CustomerStatus> statuses);
 
-    // The paged form of the same filter, for GET /api/customers?page=&size=.
+    // The paged form of the same filter, for GET /api/v1/customers?page=&size=.
     // Both exist because the unpaged one still backs the places that genuinely
     // want the whole filtered set; the controller no longer does.
     Page<Customer> findByStatusIn(Collection<CustomerStatus> statuses, Pageable pageable);

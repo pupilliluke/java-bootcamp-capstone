@@ -242,18 +242,18 @@ for _ in $(seq 1 20); do
   token="$(curl -s --max-time 15 -H "Host: ${HOST_HEADER}" \
     -H 'Content-Type: application/json' \
     -d '{"username":"admin1","password":"admin1"}' \
-    "http://${INGRESS}/api/auth/login" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')" || true
+    "http://${INGRESS}/api/v1/auth/login" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')" || true
   [ -n "$token" ] && break
   sleep 3
 done
 [ -n "$token" ] || fail "login never returned a token after 20 attempts"
 pass "login issued a token"
 
-code="$(get_status /api/customers -H "Authorization: Bearer ${token}")"
+code="$(get_status /api/v1/customers -H "Authorization: Bearer ${token}")"
 [ "$code" = "200" ] || fail "authenticated read returned $code, expected 200"
 pass "authenticated read 200"
 
-code="$(get_status /api/customers)"
+code="$(get_status /api/v1/customers)"
 [ "$code" = "401" ] || fail "anonymous read returned $code, expected 401"
 pass "anonymous read refused with 401"
 
@@ -288,7 +288,7 @@ code="$(wait_for_ingress 200 /actuator/health/readiness)" ||
   fail "readiness did not recover after the rollback, last was $code"
 pass "readiness 200 after rollback"
 
-code="$(get_status /api/customers)"
+code="$(get_status /api/v1/customers)"
 [ "$code" = "401" ] || fail "anonymous read returned $code after rollback, expected 401"
 pass "authorisation still enforced after rollback"
 

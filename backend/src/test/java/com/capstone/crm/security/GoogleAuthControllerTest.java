@@ -58,7 +58,7 @@ class GoogleAuthControllerTest {
     void aVerifiedTokenForASeededAccountReturnsAnAccessToken() throws Exception {
         when(verifier.verify(anyString())).thenReturn(identity("agent1@example.test", true));
 
-        mockMvc.perform(post("/api/auth/google")
+        mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("google-id-token")))
                 .andExpect(status().isOk())
@@ -73,7 +73,7 @@ class GoogleAuthControllerTest {
         when(verifier.verify(anyString())).thenReturn(identity(PROVISIONED_EMAIL, true));
         assertThat(users.findByEmailIgnoreCase(PROVISIONED_EMAIL)).isEmpty();
 
-        mockMvc.perform(post("/api/auth/google")
+        mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("google-id-token")))
                 .andExpect(status().isForbidden());
@@ -91,7 +91,7 @@ class GoogleAuthControllerTest {
     void anUnverifiedEmailIsUnauthorized() throws Exception {
         when(verifier.verify(anyString())).thenReturn(identity("unverified@example.test", false));
 
-        mockMvc.perform(post("/api/auth/google")
+        mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("google-id-token")))
                 .andExpect(status().isUnauthorized());
@@ -102,7 +102,7 @@ class GoogleAuthControllerTest {
         when(verifier.verify(anyString()))
                 .thenThrow(new InvalidCredentialsException("Invalid Google token"));
 
-        mockMvc.perform(post("/api/auth/google")
+        mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("forged")))
                 .andExpect(status().isUnauthorized());
@@ -110,7 +110,7 @@ class GoogleAuthControllerTest {
 
     @Test
     void aMissingIdTokenIsABadRequest() throws Exception {
-        mockMvc.perform(post("/api/auth/google")
+        mockMvc.perform(post("/api/v1/auth/google")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("")))
                 .andExpect(status().isBadRequest());
