@@ -29,7 +29,15 @@ export const healthApi = {
   // intercept401: false because a 401 here should not sign the user out. The
   // panel reports what it found; it is a diagnostic, and a diagnostic that
   // logs you out when it fails is worse than one that says "unauthorized".
+  // treatAsOk: [503] because Actuator maps DOWN to 503 while still sending
+  // the full component breakdown in the body. Without this, every real DOWN
+  // rendered as "Unreachable" and the component detail was discarded at the
+  // transport -- the panel could never actually show the state it exists to
+  // show. (Its tests mocked this module and so proved nothing about it.)
   get(signal?: AbortSignal): Promise<HealthResponse> {
-    return http<HealthResponse>('/actuator/health', {}, signal, { intercept401: false })
+    return http<HealthResponse>('/actuator/health', {}, signal, {
+      intercept401: false,
+      treatAsOk: [503],
+    })
   },
 }

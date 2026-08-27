@@ -6,7 +6,14 @@ import { ApiError } from './ApiError'
 // dev proxy forwards to the backend on :8080 (see vite.config.ts).
 const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
 
-export type RequestOptions = { intercept401?: boolean }
+export type RequestOptions = {
+  intercept401?: boolean
+  // Statuses to parse and return as a normal body instead of throwing.
+  // Actuator answers a DOWN system with 503 and a JSON body that still says
+  // which component is down -- for a health check, that body IS the answer,
+  // and throwing it away turns "reachable but unhealthy" into "unreachable".
+  treatAsOk?: number[]
+}
 
 // One place that does fetch, sets headers, attaches the bearer token, and maps
 // every failure to ApiError. Components never call fetch directly.
@@ -16,7 +23,7 @@ export async function http<T>(
   signal?: AbortSignal,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { intercept401 = true } = options
+  const { intercept401 = true, treatAsOk = [] } = options
 
   const headers = new Headers(init.headers)
   if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
@@ -61,7 +68,7 @@ export async function http<T>(
     throw new ApiError('Your session has ended. Sign in again.', 'http', 401)
   }
 
-  if (!res.ok) {
+  if (!res.ok && !treatAsOk.includes(res.status)) {
     throw new ApiError(await errorMessage(res), 'http', res.status)
   }
 
