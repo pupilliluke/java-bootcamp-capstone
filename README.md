@@ -38,7 +38,7 @@ browser back button does nothing and a refresh returns you to the dashboard.
 Two things are deliberately honest rather than finished:
 
 - **Editing a customer is disabled.** The form opens and shows a message
-  explaining that the API has no `PUT /api/customers` yet, and the save button
+  explaining that the API has no `PUT /api/v1/customers` yet, and the save button
   stays greyed out.
 - **Contacts, activities, and reports run on hardcoded data**, because no
   endpoint serves them. Every panel that does carries a "Demo data" tag so
@@ -62,9 +62,9 @@ any customer that already exists, so restarts neither wipe nor duplicate them.
 
 ### Kafka interaction messaging
 
-- Accept interaction requests through `POST /api/interactions`.
+- Accept interaction requests through `POST /api/v1/interactions`.
 - Save each accepted interaction before publishing its event.
-- Read a customer's interactions through `GET /api/customers/{customerId}/interactions`.
+- Read a customer's interactions through `GET /api/v1/customers/{customerId}/interactions`.
 - Create a Kafka event with a UUID event ID, interaction ID, event type, version, timestamp, customer ID, channel, and notes.
 - Publish events to the versioned topic named by `CRM_INTERACTION_TOPIC`, `crm.interaction.v1` by default.
 - Use `customerId` as the Kafka message key to preserve ordering for one customer.
@@ -257,14 +257,14 @@ before demo day, never during.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/auth/login` | Exchange a username and password for a bearer token |
-| `GET` | `/api/customers` | List customers |
-| `GET` | `/api/customers/{customerId}` | Get one customer |
-| `POST` | `/api/customers` | Create a customer |
-| `PUT` | `/api/customers/{customerId}` | Update a customer |
-| `DELETE` | `/api/customers/{customerId}` | Soft-delete a customer (ADMIN only) |
-| `POST` | `/api/interactions` | Publish an interaction event |
-| `GET` | `/api/customers/{customerId}/interactions` | Read persisted interaction history |
+| `POST` | `/api/v1/auth/login` | Exchange a username and password for a bearer token |
+| `GET` | `/api/v1/customers` | List customers |
+| `GET` | `/api/v1/customers/{customerId}` | Get one customer |
+| `POST` | `/api/v1/customers` | Create a customer |
+| `PUT` | `/api/v1/customers/{customerId}` | Update a customer |
+| `DELETE` | `/api/v1/customers/{customerId}` | Soft-delete a customer (ADMIN only) |
+| `POST` | `/api/v1/interactions` | Publish an interaction event |
+| `GET` | `/api/v1/customers/{customerId}/interactions` | Read persisted interaction history |
 
 The interaction endpoint accepts `customerId`, `channel`, and `notes`. It saves
 the interaction, publishes the event, and returns `202 Accepted`. The customer
@@ -367,7 +367,7 @@ There is no `.env` in a deployed environment. Both imports skip, and the same ke
 
 Two accounts are seeded into the `app_user` table on first startup, with BCrypt
 password hashes — they are rows in PostgreSQL, not hardcoded users.
-`POST /api/auth/login` returns a bearer token to send as
+`POST /api/v1/auth/login` returns a bearer token to send as
 `Authorization: Bearer <token>`.
 
 | Username | Password | Role |
@@ -375,7 +375,7 @@ password hashes — they are rows in PostgreSQL, not hardcoded users.
 | `agent1` | `agent1` | AGENT |
 | `admin1` | `admin1` | ADMIN |
 
-`/api/customers` and `/api/interactions` require AGENT or ADMIN. `/api/admin` requires ADMIN. `/api/auth/login` and the Actuator health probes are public.
+`/api/v1/customers` and `/api/v1/interactions` require AGENT or ADMIN. `/api/v1/admin` requires ADMIN. `/api/v1/auth/login` and the Actuator health probes are public.
 
 ## Project structure
 

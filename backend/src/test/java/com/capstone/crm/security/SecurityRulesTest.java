@@ -25,20 +25,20 @@ class SecurityRulesTest {
 
     @Test
     void anonymousListIsUnauthorized() throws Exception {
-        mockMvc.perform(get("/api/customers"))
+        mockMvc.perform(get("/api/v1/customers"))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
     void agentTokenCanListCustomers() throws Exception {
-        mockMvc.perform(get("/api/customers")
+        mockMvc.perform(get("/api/v1/customers")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isOk());
     }
 
     @Test
     void agentIsForbiddenFromAdminPaths() throws Exception {
-        mockMvc.perform(get("/api/admin/reports")
+        mockMvc.perform(get("/api/v1/admin/reports")
                         .header("Authorization", "Bearer " + jwtService.issueToken("agent1", "AGENT")))
                 .andExpect(status().isForbidden());
     }
@@ -65,7 +65,7 @@ class SecurityRulesTest {
                         .encodeToString(elevated.getBytes(StandardCharsets.UTF_8))
                 + "." + parts[2];
 
-        mockMvc.perform(get("/api/customers").header("Authorization", "Bearer " + forged))
+        mockMvc.perform(get("/api/v1/customers").header("Authorization", "Bearer " + forged))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -77,7 +77,7 @@ class SecurityRulesTest {
 
     @Test
     void loginReturnsATokenForKnownCredentials() throws Exception {
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"agent1\",\"password\":\"agent1\"}"))
                 .andExpect(status().isOk())
@@ -87,7 +87,7 @@ class SecurityRulesTest {
 
     @Test
     void loginRejectsAWrongPassword() throws Exception {
-        mockMvc.perform(post("/api/auth/login")
+        mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"agent1\",\"password\":\"wrong\"}"))
                 .andExpect(status().isUnauthorized());

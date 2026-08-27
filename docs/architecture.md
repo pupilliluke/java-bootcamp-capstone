@@ -48,11 +48,11 @@ flowchart TB
 
 | Path | Public | AGENT | ADMIN |
 | ---- | ------ | ----- | ----- |
-| `/api/auth/login` | ✅ | ✅ | ✅ |
+| `/api/v1/auth/login` | ✅ | ✅ | ✅ |
 | `/actuator/health` and probes | ✅ | ✅ | ✅ |
-| `/api/customers/**` | ❌ | ✅ | ✅ |
-| `/api/interactions/**` | ❌ | ✅ | ✅ |
-| `/api/admin/**` | ❌ | ❌ 403 | ✅ |
+| `/api/v1/customers/**` | ❌ | ✅ | ✅ |
+| `/api/v1/interactions/**` | ❌ | ✅ | ✅ |
+| `/api/v1/admin/**` | ❌ | ❌ 403 | ✅ |
 | anything else | ❌ | authenticated | authenticated |
 
 ## Authentication flow
@@ -65,7 +65,7 @@ sequenceDiagram
   participant DB as PostgreSQL
   participant JWT as JwtService
 
-  UI->>API: POST /api/auth/login
+  UI->>API: POST /api/v1/auth/login
   API->>DB: findByUsername
   DB-->>API: app_user row with BCrypt hash and role
   API->>API: passwordEncoder.matches
@@ -132,8 +132,8 @@ The remaining messaging gaps are the outbox and a durable consumer side effect.
 ```mermaid
 %%{init: {"flowchart": {"curve": "linear", "rankSpacing": 50, "nodeSpacing": 40}}}%%
 flowchart TB
-  Ctrl["InteractionController, POST /api/interactions"]
-  Read["GET /api/customers/{id}/interactions"]
+  Ctrl["InteractionController, POST /api/v1/interactions"]
+  Read["GET /api/v1/customers/{id}/interactions"]
   Svc["InteractionService.createAndPublish"]
   Cust["CustomerService, in-memory map, validation only"]
   IntT[("interaction table")]

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { authApi } from '../api/auth'
-import { ApiError } from '../api/ApiError'
+import { authApi } from '../api/v1/auth'
+import { ApiError } from '../api/v1/ApiError'
 import GoogleSignInButton from '../auth/GoogleSignInButton'
 import { GSI_ENABLED } from '../config'
 

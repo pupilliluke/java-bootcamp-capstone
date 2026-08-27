@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { adminUsersApi } from '../api/adminUsers'
-import { ApiError } from '../api/ApiError'
+import { adminUsersApi } from '../api/v1/adminUsers'
+import { ApiError } from '../api/v1/ApiError'
 import { useAuth } from '../auth/AuthContext'
 import type { AdminUser, UserRole } from '../types/user'
 

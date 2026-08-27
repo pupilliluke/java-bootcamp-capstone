@@ -59,7 +59,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const loginResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/auth/login' &&
+          new URL(response.url()).pathname === '/api/v1/auth/login' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Sign in', exact: true }).click()
@@ -83,7 +83,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const createResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/customers' &&
+          new URL(response.url()).pathname === '/api/v1/customers' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -113,7 +113,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
 
       const interactionResponsePromise = page.waitForResponse(
         (response) =>
-          new URL(response.url()).pathname === '/api/interactions' &&
+          new URL(response.url()).pathname === '/api/v1/interactions' &&
           response.request().method() === 'POST',
       )
       await page.getByRole('button', { name: 'Add Activity', exact: true }).click()
@@ -182,7 +182,7 @@ test('agent can create a customer, log an interaction, and read it back', async 
     apiCalls.some(
       (call) =>
         call.method === 'GET' &&
-        call.path === `/api/customers/${encodeURIComponent(customerId)}/interactions`,
+        call.path === `/api/v1/customers/${encodeURIComponent(customerId)}/interactions`,
     ),
     'the interaction history was read from the nested customer endpoint',
   ).toBe(true)

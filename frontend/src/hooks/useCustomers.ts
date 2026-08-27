@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { customersApi } from '../api/customers'
-import { ApiError } from '../api/ApiError'
+import { customersApi } from '../api/v1/customers'
+import { ApiError } from '../api/v1/ApiError'
 import { ALL_CUSTOMER_STATUSES, type Customer, type CustomerStatus } from '../types/customer'
 
 // Loads the customer list on mount (Lab 35 useCustomers pattern).

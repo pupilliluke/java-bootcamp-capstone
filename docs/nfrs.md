@@ -12,7 +12,7 @@
 
 | # | Category | Target | Measured by | Environment | Status |
 | - | -------- | ------ | ----------- | ----------- | ------ |
-| 1 | Performance | p95 < 300 ms for `GET /api/customers` and `POST /api/interactions` | timed requests / `/actuator/metrics` | local | Target — to validate |
+| 1 | Performance | p95 < 300 ms for `GET /api/v1/customers` and `POST /api/v1/interactions` | timed requests / `/actuator/metrics` | local | Target — to validate |
 | 2 | Security | Unauthenticated write → **401**; authenticated wrong-role → **403** | `SecurityRulesTest`, `AppUserAuthTest` | local (CI) | ✅ Verified |
 | 3 | Traceability | 100% of requests carry a correlation ID, propagated to logs and to the Kafka `InteractionEvent` | `CorrelationIdFilter` + log/event inspection | local | ✅ Implemented |
 | 4 | Recoverability | Zero customer/interaction data loss across a backend restart; rollback to the prior image digest | restart proof + `docs/rollback-runbook.md` + `k8s/smoke.sh` | local / cluster | ✅ After #53 (customer persistence) |
@@ -24,7 +24,7 @@
 ## 1. Performance
 
 - **Metric:** p95 request latency.
-- **Target:** < 300 ms for `GET /api/customers` (list) and `POST /api/interactions` (create),
+- **Target:** < 300 ms for `GET /api/v1/customers` (list) and `POST /api/v1/interactions` (create),
   single-node local stack, warm JVM, ≤ 100 seeded rows.
 - **How measured:** repeated timed requests against `:8080` (e.g. a short `curl`/k6 loop),
   cross-checked against `GET /actuator/metrics/http.server.requests`.
@@ -36,8 +36,8 @@
 ## 2. Security
 
 - **Metric:** HTTP status on unauthorized access.
-- **Target:** unauthenticated write to a protected route (`POST /api/customers`,
-  `POST /api/interactions`) returns **401**; an authenticated user without the required role
+- **Target:** unauthenticated write to a protected route (`POST /api/v1/customers`,
+  `POST /api/v1/interactions`) returns **401**; an authenticated user without the required role
   (e.g. `AGENT` calling an admin-only route) returns **403**. Deny-by-default.
 - **How measured:** `SecurityRulesTest` and `AppUserAuthTest` (negative-path assertions),
   run in CI on every push.

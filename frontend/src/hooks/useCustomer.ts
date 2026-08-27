@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { customersApi } from '../api/customers'
-import { ApiError } from '../api/ApiError'
+import { customersApi } from '../api/v1/customers'
+import { ApiError } from '../api/v1/ApiError'
 import type { Customer } from '../types/customer'
 
-// Loads a single customer by id (GET /api/customers/{id}).
+// Loads a single customer by id (GET /api/v1/customers/{id}).
 export function useCustomer(customerId: string) {
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)

@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/customers/{customerId}/interactions")
+@RequestMapping("/api/v1/customers/{customerId}/interactions")
 public class CustomerInteractionController {
 
     private final InteractionService interactionService;

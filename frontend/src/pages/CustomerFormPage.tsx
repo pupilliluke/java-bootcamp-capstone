@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { customersApi } from '../api/customers'
-import { ApiError } from '../api/ApiError'
+import { customersApi } from '../api/v1/customers'
+import { ApiError } from '../api/v1/ApiError'
 import type { Customer, CustomerStatus } from '../types/customer'
 import type { Navigate } from '../nav'
 

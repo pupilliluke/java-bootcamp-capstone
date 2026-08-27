@@ -45,7 +45,7 @@ Proposed beats, all of which already work:
 | # | Beat | Proves | Fallback |
 | - | ---- | ------ | -------- |
 | 1 | Log in as `admin1` | JWT issued | screenshot |
-| 2 | Anonymous `GET /api/customers` returns 401 | deny by default | `SecurityRulesTest` output |
+| 2 | Anonymous `GET /api/v1/customers` returns 401 | deny by default | `SecurityRulesTest` output |
 | 3 | Create a customer, reload, it is still there | UI to PostgreSQL | psql row |
 | 4 | Record an interaction on `CUS-1001` | the CAP-12 slice | `InteractionControllerTest` |
 | 5 | Show the correlation ID in the logs | traceability | log excerpt |

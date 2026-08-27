@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 
 @RestController
-@RequestMapping("/api/interactions")
+@RequestMapping("/api/v1/interactions")
 public class InteractionController {
 
     private final InteractionService interactionService;

@@ -3,15 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import CustomerDetailsPage from './CustomerDetailsPage'
 import { useCustomer } from '../hooks/useCustomer'
-import { interactionsApi } from '../api/interactions'
-import { customersApi } from '../api/customers'
+import { interactionsApi } from '../api/v1/interactions'
+import { customersApi } from '../api/v1/customers'
 
 vi.mock('../hooks/useCustomer')
-vi.mock('../api/interactions')
+vi.mock('../api/v1/interactions')
 // Automock rather than a hand-written factory: a factory returning only
 // { customersApi: { remove } } would make every other method undefined, so the
 // first test that reaches customersApi.list fails inside a hook instead of here.
-vi.mock('../api/customers')
+vi.mock('../api/v1/customers')
 const mockUseCustomer = vi.mocked(useCustomer)
 const mockInteractionsApi = vi.mocked(interactionsApi)
 const mockCustomersApi = vi.mocked(customersApi)

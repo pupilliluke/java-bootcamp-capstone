@@ -2,12 +2,12 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import CustomerFormPage from './CustomerFormPage'
-import { ApiError } from '../api/ApiError'
+import { ApiError } from '../api/v1/ApiError'
 
 // Hoisted so the mock factory below can close over them: vi.mock is lifted
 // above the imports, and a plain const would not exist yet when it runs.
 const { create, update } = vi.hoisted(() => ({ create: vi.fn(), update: vi.fn() }))
-vi.mock('../api/customers', () => ({ customersApi: { create, update } }))
+vi.mock('../api/v1/customers', () => ({ customersApi: { create, update } }))
 
 const navigate = vi.fn()
 const onCreated = vi.fn()

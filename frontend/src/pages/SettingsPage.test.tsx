@@ -4,7 +4,7 @@ import SettingsPage from './SettingsPage'
 
 // Mock the admin API and the auth context so each state is deterministic.
 const { listPending, enable } = vi.hoisted(() => ({ listPending: vi.fn(), enable: vi.fn() }))
-vi.mock('../api/admin', () => ({ adminApi: { listPending, enable } }))
+vi.mock('../api/v1/admin', () => ({ adminApi: { listPending, enable } }))
 
 const auth = vi.hoisted(() => ({
   state: { status: 'authenticated', user: { username: 'admin1', role: 'ADMIN' } } as {

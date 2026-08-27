@@ -10,23 +10,23 @@ export const customersApi = {
     const query = statuses?.length
       ? `?${statuses.map((s) => `status=${encodeURIComponent(s)}`).join('&')}`
       : ''
-    return http<Customer[]>(`/api/customers${query}`, {}, signal)
+    return http<Customer[]>(`/api/v1/customers${query}`, {}, signal)
   },
   get(customerId: string, signal?: AbortSignal): Promise<Customer> {
-    return http<Customer>(`/api/customers/${encodeURIComponent(customerId)}`, {}, signal)
+    return http<Customer>(`/api/v1/customers/${encodeURIComponent(customerId)}`, {}, signal)
   },
   create(body: CreateCustomer, signal?: AbortSignal): Promise<Customer> {
-    return http<Customer>('/api/customers', { method: 'POST', body: JSON.stringify(body) }, signal)
+    return http<Customer>('/api/v1/customers', { method: 'POST', body: JSON.stringify(body) }, signal)
   },
   update(customerId: string, body: CustomerUpdate, signal?: AbortSignal): Promise<Customer> {
     return http<Customer>(
-        `/api/customers/${encodeURIComponent(customerId)}`,
+        `/api/v1/customers/${encodeURIComponent(customerId)}`,
         { method: 'PUT', body: JSON.stringify(body) },
         signal,
     )
   },
   // Soft delete, probably will stay this way
   remove(customerId: string, signal?: AbortSignal): Promise<void> {
-    return http<void>(`/api/customers/${encodeURIComponent(customerId)}`, { method: 'DELETE' }, signal)
+    return http<void>(`/api/v1/customers/${encodeURIComponent(customerId)}`, { method: 'DELETE' }, signal)
   },
 }
