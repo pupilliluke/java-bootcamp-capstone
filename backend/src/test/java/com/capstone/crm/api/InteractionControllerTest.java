@@ -1,5 +1,6 @@
 package com.capstone.crm.api;
 
+import com.capstone.crm.entity.Interaction;
 import com.capstone.crm.messaging.event.InteractionEvent;
 import com.capstone.crm.messaging.producer.InteractionEventProducer;
 import com.capstone.crm.repository.InteractionRepository;
@@ -59,10 +60,20 @@ class InteractionControllerTest {
                 .andExpect(jsonPath("$.notes").value("Renewal follow-up"));
 
         assertThat(interactions.count()).isEqualTo(1);
+        // The event keeps notes and now also carries the actor (issue #86).
         verify(producer).publish(argThat((InteractionEvent event) ->
                 event.customerId().equals("CUS-1001")
                         && event.channel().equals("EMAIL")
-                        && event.notes().equals("Renewal follow-up")));
+                        && event.notes().equals("Renewal follow-up")
+                        && "agent1".equals(event.actor())));
+
+        // The row records both audit columns from the request that made it: the
+        // correlation id (issue #88, what the durability SELECT reads) and the
+        // authenticated actor (issue #86). This is the persistence-layer proof
+        // behind the durability rehearsal in docs/frontend-persistence-demo.md.
+        Interaction saved = interactions.findAll().get(0);
+        assertThat(saved.getCorrelationId()).isEqualTo("journey-test");
+        assertThat(saved.getCreatedBy()).isEqualTo("agent1");
 
         mockMvc.perform(get("/api/v1/customers/CUS-1001/interactions")
                         .header("Authorization", "Bearer " + token))
