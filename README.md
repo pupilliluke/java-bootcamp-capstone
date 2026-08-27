@@ -212,16 +212,19 @@ laptop proxying to it. Full record, evidence, and demo pre-flight:
 
 ### Deploy
 
-1. `Copy-Item k8s/cluster.env.example .env.cluster`
+1. `copy k8s\cluster.env.example .env.cluster` (works in cmd and PowerShell)
 2. Fill `.env.cluster` from your row of the credentials sheet
-3. `bash k8s/cluster-deploy.sh`
+3. `bash k8s/cluster-deploy.sh` — **in Git Bash**
 
 Safe to re-run: the Secret is created only if absent, everything else is
-apply/patch.
+apply/patch. Step 3 really does need Git Bash — in cmd and PowerShell, plain
+`bash` is WSL's, which cannot read Windows paths; from those shells run
+`"C:\Program Files\Git\bin\bash.exe" k8s/cluster-deploy.sh` instead (the
+script detects WSL and says so rather than failing confusingly).
 
 ### View it
 
-1. `Set-Content frontend/.env.local 'VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io'`
+1. Create `frontend/.env.local` containing the line `VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io`
 2. `npm --prefix frontend run dev`
 3. Open <http://localhost:5173> and sign in with the demo accounts below
 

@@ -14,6 +14,17 @@
 # does not reliably carry the executable bit.
 set -euo pipefail
 
+# On Windows, plain `bash` in cmd and PowerShell resolves to WSL's
+# (C:\Windows\System32\bash.exe), which cannot read the C:/... paths this
+# script and .env.cluster use -- the kubeconfig check below would fail on a
+# file that exists. Fail here with the reason instead of there without it.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  echo "This is WSL bash, which cannot read Windows C:/ paths." >&2
+  echo "Run from Git Bash, or from cmd/PowerShell as:" >&2
+  echo "  \"C:\\Program Files\\Git\\bin\\bash.exe\" k8s/cluster-deploy.sh" >&2
+  exit 1
+fi
+
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 if [ ! -f .env.cluster ]; then
