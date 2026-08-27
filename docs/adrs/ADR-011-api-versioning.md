@@ -33,6 +33,17 @@ would have to learn why. The version also has to appear literally in
 `SecurityConfig`'s matchers regardless, so central configuration would not
 even buy a single point of change.
 
+The API's `v1` and the event contract's `v1` (`crm.interaction.v1`,
+`version: 1` in the payload — ADR-010) are **separate counters that happen to
+agree today**, not one number. They version different contracts for different
+audiences: the path versions what a caller of the URL sees, the topic versions
+what a consumer on the broker reads, and a break in one is usually no break in
+the other. Stripping `notes` from the event (issue #86's open question) would
+bump the topic to `.v2` while the REST surface is untouched; renaming a field
+in an HTTP response would create `/api/v2` while consumers keep reading `.v1`.
+Forcing the numbers to match would convert every one-sided break into churn on
+the unbroken side. What the two share is the *rule* below, not the count.
+
 **Compatibility rule** (the REST mirror of ADR-010's event rule): additive
 changes stay in v1 — a new endpoint, a new optional request field, a new
 response field a caller is free to ignore. Any change an existing caller
