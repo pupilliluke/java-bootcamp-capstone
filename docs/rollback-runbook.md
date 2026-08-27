@@ -334,3 +334,35 @@ images, which needs the pipeline to build and push an image per commit — the
 `package` job currently produces a jar and a checksum, not an image.
 
 That gap is worth naming in the defence rather than hoping nobody asks.
+
+## Rehearsal evidence — course cluster (2026-08-27)
+
+The `OWN_CLUSTER=0` mode described above was run for real against the shared
+cluster, so the sentence "rehearsed on the cluster it would actually be
+performed on" is now a dated fact rather than a design goal:
+
+```
+OWN_CLUSTER=0 NS=student02 INGRESS=100.22.136.97:80 \
+  HOST_HEADER=crm-student02.100.22.136.97.nip.io bash k8s/smoke.sh
+```
+
+All checks passed. Observed:
+
+- setup steps 1–3 skipped with their reasons printed, exactly as designed —
+  in particular the Secret was left alone, protecting the real credential
+- baseline: readiness 200 through the ingress, login issued a token,
+  authenticated read 200, anonymous read 401
+- break: `crm-api:does-not-exist` produced a second pod in `ErrImagePull`
+  while the digest-pinned pod stayed `1/1 Running`; the rollout did not
+  converge; **the ingress served 200 throughout** — the bad version never
+  reached a user
+- recover: `rollout undo` restored
+  `ghcr.io/pupilliluke/crm-api@sha256:92d02fdf...` (matched against the
+  image recorded before the break), readiness returned 200, and anonymous
+  reads were still 401 afterwards
+
+Deployment context for this run — namespace, digest, ingress host, and the
+per-student ConfigMap values — is recorded in
+`course-cluster-deployment.md`. The caveat above still holds: this breaks
+the deployment for about a minute, so it is a rehearsal to run before demo
+day, not during it.

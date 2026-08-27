@@ -45,5 +45,4 @@ Covered by `SecurityRulesTest`, `AppUserAuthTest`, `CustomerControllerTest`,
 | Gap | Consequence |
 | --- | ----------- |
 | Trivy runs `ignore-unfixed`, and only over what the image ships | A HIGH with no available fix is invisible, as is anything in test or provided scope |
-| Image is never pushed to a registry | The manifest pins a tag, not a digest. See ADR-005 |
-| `k8s/smoke.sh` writes to whatever kubectl context is current | Harmless while every cluster is disposable |
+| `k8s/smoke.sh` in its default mode writes to whatever kubectl context is current | Harmless while the cluster is disposable k3d; on a shared cluster, use `OWN_CLUSTER=0`, which refuses to run without an explicit namespace |

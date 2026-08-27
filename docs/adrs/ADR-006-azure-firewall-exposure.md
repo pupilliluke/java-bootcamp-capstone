@@ -1,6 +1,6 @@
 # ADR-006: Accepting the open Azure firewall
 
-- **Status:** Proposed | Accepted | Superseded
+- **Status:** Accepted
 - **Date:** 08-25-2026
 - **Deciders:** Chase Bulkin
 - **Related backlog:** Issue #32

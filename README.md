@@ -10,14 +10,14 @@ PostgreSQL for accounts.
 | --- | --- |
 | Front end | React and TypeScript, nine screens behind a login guard |
 | Backend | Spring Boot REST API, JWT authentication and roles, Kafka producer and consumer |
-| Database | PostgreSQL with Flyway for `app_user` and durable `interaction` rows; customers are still in memory |
+| Database | PostgreSQL with Flyway: `app_user`, `customer`, `interaction`, and processed-event rows, all durable |
 | Kafka messaging | Versioned interaction events, idempotent consumer processing, retry and dead-letter-topic configuration |
 | Tests | Backend/frontend tests, embedded Kafka and real-PostgreSQL integration coverage, plus a Playwright browser journey |
 | Docs | Six planning documents in `docs/`, starting with `docs/backlog.md` |
 | Defense, reports | Directories reserved for project material |
 
-**What is not built yet:** customers still reset on restart. Interactions are
-stored durably and can be read back while their customer exists.
+**What is not built yet:** the contacts, activities, and reports screens still
+run on demo data — every panel that does carries a "Demo data" tag.
 
 ## Features
 
@@ -57,7 +57,8 @@ from the API clears the session and returns to the login screen.
 - Return structured errors for missing customers, duplicate customer IDs, and invalid requests.
 - Seed two demo customers on startup: `CUS-1001` and `CUS-1002`.
 
-Customer data is stored in memory and resets when the application restarts.
+Customer rows are durable in PostgreSQL (`V3__customer.sql`); the seeder skips
+any customer that already exists, so restarts neither wipe nor duplicate them.
 
 ### Kafka interaction messaging
 
@@ -203,6 +204,55 @@ docker compose down
 Add `-v` to that only when you want to wipe the database — it deletes the volume,
 so the schema and every row go with it.
 
+## Run it on the course cluster
+
+Backend on the shared k3s cluster (one namespace per student), UI on your
+laptop proxying to it. Full record, evidence, and demo pre-flight:
+`docs/course-cluster-deployment.md`.
+
+### Deploy
+
+1. `copy k8s\cluster.env.example .env.cluster` (works in cmd and PowerShell)
+2. Fill `.env.cluster` from your row of the credentials sheet
+3. `bash k8s/cluster-deploy.sh` — **in Git Bash**
+
+Safe to re-run: the Secret is created only if absent, everything else is
+apply/patch. Step 3 really does need Git Bash — in cmd and PowerShell, plain
+`bash` is WSL's, which cannot read Windows paths; from those shells run
+`"C:\Program Files\Git\bin\bash.exe" k8s/cluster-deploy.sh` instead (the
+script detects WSL and says so rather than failing confusingly).
+
+### View it
+
+1. Create `frontend/.env.local` containing the line `VITE_PROXY_TARGET=http://crm-studentNN.100.22.136.97.nip.io`
+2. `npm --prefix frontend run dev`
+3. Open <http://localhost:5173> and sign in with the demo accounts below
+
+The browser stays on localhost and Vite forwards `/api` server-side, so CORS
+never enters the picture.
+
+### Watch it
+
+Students have no SSH — `kubectl` against the cluster API *is* the terminal on
+the backend. Set `KUBECONFIG` to your `studentNN.yaml` once per shell, then:
+
+| What | Command |
+| ---- | ------- |
+| Pods, live | `kubectl -n studentNN get pods -w` |
+| Application log, live | `kubectl -n studentNN logs -f deploy/crm-api` |
+| Health through the ingress | `curl http://crm-studentNN.100.22.136.97.nip.io/actuator/health/readiness` |
+| Your schema in SQL | `psql -h 100.22.136.97 -U studentNN -d bootcamp` |
+| Your Kafka topic, live | `docker run --rm edenhill/kcat:1.7.1 -b 100.22.136.97:9092 -t studentNN.crm.interaction.v1 -C -o beginning` |
+
+Record an interaction in the UI with the log window open: one correlation id,
+on the HTTP request line and the Kafka consumer line.
+
+### Break and recover
+
+Rehearsed with dated evidence in `docs/rollback-runbook.md` — a bad image
+that never reaches a user, undone with one `kubectl rollout undo`. Rehearse
+before demo day, never during.
+
 ## API endpoints
 
 | Method | Path | Purpose |
@@ -333,6 +383,7 @@ password hashes — they are rows in PostgreSQL, not hardcoded users.
 java-bootcamp-capstone/
 ├── backend/                 Spring Boot application and tests
 ├── frontend/                React + TypeScript application (Vite)
+├── k8s/                     Manifests, cluster ConfigMap overlay, smoke.sh, cluster-deploy.sh
 ├── scripts/                 verify-setup.mjs, the one-command setup check
 ├── docs/                    Planning documents — start with backlog.md
 ├── defense/                 Reserved for defense material
@@ -352,3 +403,5 @@ java-bootcamp-capstone/
 | `risk-register.md` | Known risks, who owns them, and what was accepted |
 | `azure-admin-runbook.md` | Operating the hosted database |
 | `azure-authentication.md` | How the Azure connection authenticates |
+| `course-cluster-deployment.md` | The course k3s deployment: record, evidence, access model, demo pre-flight |
+| `rollback-runbook.md` | Known-good digests and the rehearsed break-and-recover procedure |

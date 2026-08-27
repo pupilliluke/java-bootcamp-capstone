@@ -30,7 +30,7 @@ Each line below comes from the final weighted team rubric.
 | CI/CD, Containers & Deployment | 15% | **Partial** | `CI-01` ([open](#ci-01-repeatable-pipeline)), `IMG-01` ([open](#img-01-tested-non-root-container-image)), `DEPLOY-01` ([open](#deploy-01-k3d-deploy-smoke-and-rollback)) |
 | Testing & Observability | 10% | **Partial** | `TEST-01` ([open](#test-01-automated-test-layers)), `OBS-01` ([open](#obs-01-health-logs-and-correlation)) |
 | Demonstration Scenario & Recovery | 10% | **Partial** | `DEMO-01` ([open](#demo-01-agent-journey-and-controlled-recovery)), `DEMO-02` ([open](#demo-02-timed-demo-and-fallback-pack)) |
-| Security & Operational Hygiene | 5% | **Partial** | `SEC-01` ([open](#sec-01-jwt-and-role-enforcement)), `SEC-02` ([open](#sec-02-secrets-scanning-and-residual-findings)) |
+| Security & Operational Hygiene | 5% | **Proven** | `SEC-01` ([open](#sec-01-jwt-and-role-enforcement)), `SEC-02` ([open](#sec-02-secrets-scanning-and-residual-findings)) |
 | Documentation & Repository Quality | 5% | **Partial** | `DOC-01` ([open](#doc-01-reproducible-project-documentation)), `PLAN-02` ([open](#plan-02-measurable-nfrs-and-adrs)) |
 | Presentation & Communication | 5% | **Missing** | `PRES-01` ([open](#pres-01-defense-packet-and-reflections)) |
 
@@ -64,15 +64,19 @@ Files:
 
 ### PLAN-02: Measurable NFRs and ADRs
 
-**Status:** Missing
+**Status:** Proven
 
-We still need measurable quality targets and decision records with alternatives
-and consequences.
+Every NFR states a metric, a target, a measurement method, and an environment.
+Ten decision records cover the course's five named areas — database (ADR-009),
+Kafka contract (ADR-010), consistency (ADR-008), auth (ADR-001), deploy
+(ADR-005) — each with alternatives and consequences. Issues #32 and #37 are
+closed.
 
-Work items:
+Files:
 
-- NFR issue #37 ([open](https://github.com/pupilliluke/java-bootcamp-capstone/issues/37))
-- ADR issue #32 ([open](https://github.com/pupilliluke/java-bootcamp-capstone/issues/32))
+- `docs/nfrs.md` ([open](../docs/nfrs.md))
+- `docs/adrs/` ([open](../docs/adrs/))
+- `docs/team-plan.md` ([open](../docs/team-plan.md))
 
 ### BE-01: Layered and validated Spring API
 
@@ -141,15 +145,19 @@ Files and runs:
 
 ### DATA-02: Customer persistence
 
-**Status:** Missing
+**Status:** Partial
 
-Customer data currently lives in an in-memory map and resets with the backend.
-This claim needs a JPA repository, migration, and restart proof.
+Customers live in PostgreSQL: `V3__customer.sql` owns the table,
+`V4__customer_number_seq.sql` backs the assigned `CUS-` numbers, the repository
+is Spring Data JPA, and `CustomerRepositoryIT` exercises it against the real
+engine. The named gap: the restart-durability rehearsal (create → restart →
+still there) has not been recorded as evidence yet.
 
 Files:
 
+- `backend/src/main/resources/db/migration/V3__customer.sql` ([open](../backend/src/main/resources/db/migration/V3__customer.sql))
 - `backend/src/main/java/com/capstone/crm/repository/CustomerRepository.java` ([open](../backend/src/main/java/com/capstone/crm/repository/CustomerRepository.java))
-- Architecture gaps ([open](../docs/architecture.md#gaps))
+- `backend/src/test/java/com/capstone/crm/repository/CustomerRepositoryIT.java` ([open](../backend/src/test/java/com/capstone/crm/repository/CustomerRepositoryIT.java))
 
 ### CI-01: Repeatable pipeline
 
@@ -191,7 +199,7 @@ cluster. The smoke script checks health, login, role enforcement, a failed
 rollout, and recovery with `rollout undo`.
 
 The recorded failure uses a missing image. A future rehearsal should use two
-working application versions.
+working application versions (#90).
 
 Files and runs:
 
@@ -275,21 +283,23 @@ Files and screenshots:
 
 ### SEC-02: Secrets, scanning, and residual findings
 
-**Status:** Partial
+**Status:** Proven
 
 Secrets arrive through runtime configuration. Tests check that credentials stay
-out of the image. CI also reports vulnerable packages and credential-shaped
-content.
-
-Trivy currently reports findings without blocking the pipeline. The recorded
-high and critical findings still need remediation or a dated acceptance with an
-owner.
+out of the image. Trivy gates the `image` job — `exit-code: "1"` on HIGH or
+CRITICAL, vulnerabilities and secrets, over the OS layer and the fat jar's
+`BOOT-INF/lib`. The findings that once sat behind a report-only flag were dealt
+with rather than waved through: the Spring Boot parent bump to 3.5.16 cleared
+the dependency CVEs, and what remains is accepted by id in `.trivyignore.yaml`,
+each entry with an owner, an expiry, and the reason. Source-level static
+analysis is a separate open question (issue #28).
 
 Files:
 
 - `.env.example` ([open](../.env.example))
 - `backend/container-structure-test.yaml` ([open](../backend/container-structure-test.yaml))
-- Trivy configuration in `.github/workflows/ci.yml` ([open](https://github.com/pupilliluke/java-bootcamp-capstone/blob/develop/.github/workflows/ci.yml))
+- Trivy gate in `.github/workflows/ci.yml` ([open](https://github.com/pupilliluke/java-bootcamp-capstone/blob/develop/.github/workflows/ci.yml))
+- `.trivyignore.yaml` ([open](../.trivyignore.yaml))
 - `docs/risk-register.md` ([open](../docs/risk-register.md))
 
 ### DOC-01: Reproducible project documentation
@@ -343,16 +353,21 @@ current set.
 
 These are the current limits of the evidence:
 
-- Customer records still use an in-memory repository and reset with the
-  backend.
+- Customer persistence landed (V3/V4, JPA); the restart-durability rehearsal is
+  not yet recorded as evidence, and the interaction row has no correlation id
+  to select by (#88).
 - Consumer duplicate tracking still uses in-memory state. The current handler
   writes a log entry.
-- Trivy reports findings and allows the pipeline to continue.
+- The interaction API diverges from the course contract in quotable ways —
+  `/api/v1` prefix, 201 on create, enumerated channel, event contents — tracked
+  as issues #82–#86.
+- Source-level static analysis is undecided (issue #28); the shipped image is
+  gated by Trivy.
 - CI and the frontend currently use Node 20. The rubric names Node 22.
-- The proven deployment is a disposable k3d environment. Azure currently hosts
-  PostgreSQL.
+- The proven deployment is a disposable k3d environment (#89 — shared-cluster
+  run and ruling). Azure currently hosts PostgreSQL.
 - The rollback rehearsal uses a missing replacement image. A
-  version-to-version promotion and rollback still needs proof.
+  version-to-version promotion and rollback still needs proof (#90).
 - The Lab 52 presentation, demo script, Q&A, retrospective, reflections, and
   self-assessment still need to be prepared.
 

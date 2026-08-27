@@ -1,6 +1,6 @@
-# ADR-005: Deploy to k3s with the image digest recorded, not pinned
+# ADR-005: Deploy to k3s with the image digest recorded, then pinned
 
-- **Status:** Accepted
+- **Status:** Accepted — amended 2026-08-27 (the digest pin landed; see the amendment at the end)
 - **Date:** 2026-08-25
 - **Deciders:** Luke
 - **Related backlog:** CAP-12
@@ -54,3 +54,19 @@ k3s runs as k3d locally and in CI, both pinned to `rancher/k3s:v1.35.5-k3s1`.
 
 - Context/container: `docs/architecture/`
 - Backlog stories: `docs/backlog.md`
+
+## Amendment (2026-08-27)
+
+Alternative A's blocker was "nothing is pushed yet", and that stopped being
+true when the `publish` job landed: every develop/main build now goes to GHCR
+tagged by commit SHA, with the repo digest printed in the run summary. PR #76
+then took the step this record left open — `k8s/deployment.yaml` pins
+`ghcr.io/pupilliluke/crm-api@sha256:4aab674c…`, the build of commit `3d24997`,
+with the reasoning in the comment above that `image:` line.
+
+What this record keeps is the practice, which the pin does not replace: the
+digest is still written into `docs/rollback-runbook.md` before every deploy,
+because a pin names what is running — what makes a rollback possible is the
+*previous* digest being written down. Rolling back is `kubectl rollout undo`,
+or `kubectl set image` to the prior recorded digest. The decision text above
+records where this started; the manifest has since moved as described here.
