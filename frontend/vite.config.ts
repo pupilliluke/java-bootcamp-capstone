@@ -22,6 +22,11 @@ export default defineConfig(({ mode }) => {
     port: 5173,
     proxy: {
       '/api': env.VITE_PROXY_TARGET || 'http://localhost:8080',
+      // The Settings page's connection panel reads /actuator/health, which is
+      // not under /api and so would otherwise be served by Vite as the SPA
+      // index. vercel.json already rewrites this prefix for deployments; this
+      // is the same rule for the dev server.
+      '/actuator': env.VITE_PROXY_TARGET || 'http://localhost:8080',
     },
   },
   test: {

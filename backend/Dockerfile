@@ -121,4 +121,10 @@ LABEL org.opencontainers.image.title="capstone-crm-api" \
       org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}"
 
+# The same revision as the label, but as an environment variable, so the
+# running application can report which commit answered (/actuator/info via
+# ConnectionInfoContributor). The label says what this image is; this says
+# what you are talking to.
+ENV GIT_SHA=${GIT_SHA}
+
 ENTRYPOINT ["java","-jar","/app/app.jar"]

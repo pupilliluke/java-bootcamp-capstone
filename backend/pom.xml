@@ -147,6 +147,17 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <!-- Writes META-INF/build-info.properties, which Actuator's info
+                 endpoint serves as the build block: artifact, version, build
+                 time. This is how the UI's connection panel knows which
+                 version of the application answered. -->
+            <goals>
+              <goal>build-info</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

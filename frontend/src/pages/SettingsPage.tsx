@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { adminApi } from '../api/admin'
 import type { PendingUser } from '../api/admin'
 import { ApiError } from '../api/ApiError'
+import ConnectionPanel from '../components/ConnectionPanel'
 
 // Issue #16: ADMINs review and approve new self-registered accounts (which are
 // created disabled). AGENTs see a notice; the backend also enforces this (403).
@@ -99,6 +100,8 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <ConnectionPanel />
     </div>
   )
 }

@@ -49,6 +49,10 @@ public class SecurityConfig {
                         // component detail stays authenticated.
                         .requestMatchers("/actuator/health", "/actuator/health/readiness",
                                 "/actuator/health/liveness").permitAll()
+                        // Info is authenticated, not public: it names the database
+                        // target, the Kafka topic and the running revision, which a
+                        // probe never needs and an anonymous scanner should not get.
+                        .requestMatchers("/actuator/info").hasAnyRole("AGENT", "ADMIN")
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Deleting a customer is the one customer operation an agent
                         // cannot do. Listed before the general rule because matchers

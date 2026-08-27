@@ -16,9 +16,23 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({ state: auth.state, login: vi.fn(), logout: vi.fn() }),
 }))
 
-beforeEach(() => {
+// The page now mounts ConnectionPanel, whose probes would otherwise attempt
+// real fetches from inside every Settings test. Resolved stubs keep the panel
+// quiet; its own behaviour is covered in ConnectionPanel.test.tsx.
+vi.mock('../api/health', () => ({
+  healthApi: { get: vi.fn().mockResolvedValue({ status: 'UP' }) },
+}))
+vi.mock('../api/info', () => ({
+  infoApi: { get: vi.fn().mockResolvedValue({}) },
+}))
+
+beforeEach(async () => {
   vi.clearAllMocks()
   auth.state = { status: 'authenticated', user: { username: 'admin1', role: 'ADMIN' } }
+  const { healthApi } = await import('../api/health')
+  const { infoApi } = await import('../api/info')
+  vi.mocked(healthApi.get).mockResolvedValue({ status: 'UP' })
+  vi.mocked(infoApi.get).mockResolvedValue({})
 })
 
 describe('SettingsPage', () => {
