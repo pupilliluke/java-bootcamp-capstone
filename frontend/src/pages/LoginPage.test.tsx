@@ -25,17 +25,10 @@ describe('LoginPage', () => {
     expect(screen.getByText(/your session has ended/i)).toBeInTheDocument()
   })
 
-  it('offers Google sign-in on the sign-in form', () => {
+  it('does not offer Google sign-in by default (opt-in)', () => {
+    // Off unless VITE_ENABLE_GSI is 'true'. A deploy to an unregistered origin
+    // would otherwise render a button that 400s with origin_mismatch.
     render(<LoginPage />)
-    // The GIS script never loads under jsdom, so the button stays an empty
-    // container; its presence is what we assert here.
-    expect(screen.getByLabelText('Sign in with Google')).toBeInTheDocument()
-  })
-
-  it('does not offer Google sign-in on the create-account form', async () => {
-    const user = userEvent.setup()
-    render(<LoginPage />)
-    await user.click(screen.getByRole('button', { name: /create an account/i }))
     expect(screen.queryByLabelText('Sign in with Google')).not.toBeInTheDocument()
   })
 
@@ -48,6 +41,36 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Confirm password')).toBeInTheDocument()
     // Disabled until username + email + 12-char matching passwords are present.
     expect(screen.getByRole('button', { name: 'Create account' })).toBeDisabled()
+  })
+})
+
+describe('LoginPage with Google Sign-In enabled', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  // GSI_ENABLED is read at module load, so stub the env then re-import the page.
+  const enabledLoginPage = async () => {
+    vi.stubEnv('VITE_ENABLE_GSI', 'true')
+    vi.resetModules()
+    return (await import('./LoginPage')).default
+  }
+
+  it('offers Google sign-in on the sign-in form when VITE_ENABLE_GSI is true', async () => {
+    const FreshLoginPage = await enabledLoginPage()
+    // The GIS script never loads under jsdom, so the button stays an empty
+    // container; its presence is what we assert here.
+    render(<FreshLoginPage />)
+    expect(screen.getByLabelText('Sign in with Google')).toBeInTheDocument()
+  })
+
+  it('still hides Google sign-in on the create-account form', async () => {
+    const FreshLoginPage = await enabledLoginPage()
+    const user = userEvent.setup()
+    render(<FreshLoginPage />)
+    await user.click(screen.getByRole('button', { name: /create an account/i }))
+    expect(screen.queryByLabelText('Sign in with Google')).not.toBeInTheDocument()
   })
 })
 
