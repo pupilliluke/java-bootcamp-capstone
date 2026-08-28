@@ -40,8 +40,9 @@ edge rewrite in `vercel.json` avoids both — it is the supported path.
    `destination` hosts to `crm-studentNN.100.22.136.97.nip.io`. (Vercel does not
    interpolate env vars into rewrite destinations, so this host is edited in the
    file, matching the per-student pattern in `k8s/cluster/configmap.yaml`.)
-3. **Set one environment variable:** `VITE_ENABLE_GSI=false`. This builds the UI
-   with password login only and no Google button — see below.
+3. **Leave Google Sign-In off** — it is off by default now (see below), so no env
+   var is needed for password-only login. The Google button and its script are
+   not injected unless `VITE_ENABLE_GSI=true`.
 4. **Attach the domain.** Project → Settings → Domains: add
    `www.neuralcrm.xyz` (primary) and `neuralcrm.xyz`. At the registrar, point
    `www` at `cname.vercel-dns.com` (CNAME) and the apex at Vercel's A record
@@ -53,13 +54,28 @@ edge rewrite in `vercel.json` avoids both — it is the supported path.
 
 ### Google Sign-In
 
-Google Sign-In needs the **serving origin** registered in the OAuth client's
-authorized JavaScript origins. The Vercel domain is not in that list, so the
-deployed demo runs with `VITE_ENABLE_GSI=false` and password login — the same
-choice CI and the Playwright journey already make. To enable it, add
-`https://www.neuralcrm.xyz` (and the `*.vercel.app` preview origin, if sign-in
-should also work on previews) to the OAuth client in the Google Cloud project,
-then set `VITE_ENABLE_GSI=true`.
+Google Sign-In is **off by default** (opt-in). No button and no
+`accounts.google.com` script are injected unless `VITE_ENABLE_GSI=true`. The
+default is deliberate: Google refuses any serving origin not listed in the OAuth
+client's **Authorized JavaScript origins**, showing a full-page **"Error 400:
+origin_mismatch"** instead of a login — so a deploy to a new domain would
+otherwise ship a broken button.
+
+To actually enable Google login on a deployed origin — two steps, and the first
+is not in this repo:
+
+1. In **Google Cloud project `398192114075`** → APIs & Services → Credentials →
+   the OAuth 2.0 client `398192114075-fb8j…`, add the exact serving origins to
+   **Authorized JavaScript origins**: `https://www.neuralcrm.xyz`,
+   `https://neuralcrm.xyz`, and each `https://<deployment>.vercel.app` preview it
+   should work on (scheme + host only — no path, no wildcards). Only the project
+   owner can do this.
+2. Set `VITE_ENABLE_GSI=true` for that build — a Vercel project env var, or
+   `.env.local` for local dev at `http://localhost:5173` (which must also be a
+   registered origin).
+
+CI and the Playwright journey leave it off, which is why the customer-journey
+test never loads the third-party script.
 
 ### The one dependency to check first
 

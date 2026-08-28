@@ -911,3 +911,40 @@ table.data tbody tr:last-child td { border-bottom: none; }
   .conn-list { grid-template-columns: 1fr; gap: 0.15rem 0; }
   .conn-list dd { margin-bottom: 0.5rem; }
 }
+
+/* Collapsible depth sections (Connection panel and The project, in depth). */
+.conn-details {
+  margin-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.conn-details summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.conn-details summary:hover { color: var(--text); }
+.conn-details > dl, .conn-details > ul, .conn-details > pre, .conn-details > p {
+  margin-top: 0.55rem;
+}
+
+.depth-points {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+.depth-points li { margin-bottom: 0.3rem; line-height: 1.45; }
+.depth-lesson { color: var(--primary); }
+
+.depth-diagram {
+  background: var(--slate-soft);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  color: var(--text);
+}
