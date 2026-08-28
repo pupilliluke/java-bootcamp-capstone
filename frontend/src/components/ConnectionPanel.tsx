@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, version as reactVersion } from 'react'
 import { healthApi, type HealthResponse, type HealthStatus } from '../api/health'
 import { infoApi, type InfoResponse } from '../api/info'
 import { ApiError } from '../api/ApiError'
@@ -95,13 +95,16 @@ export default function ConnectionPanel() {
   const backendIdentity = [
     build?.version && `v${build.version}`,
     info?.revision && info.revision.slice(0, 12),
-    connections?.profile && `profile: ${connections.profile}`,
+    // Derived server-side: "kubernetes: student02" from the platform's own
+    // signals, or "profile: local" on a laptop. Never a declared label.
+    connections?.environment,
   ]
     .filter(Boolean)
     .join(' · ')
 
   const dbIdentity = [
-    connections?.database,
+    connections?.database && `db ${connections.database}`,
+    connections?.schema && `schema ${connections.schema}`,
     ...DB_DETAIL_KEYS.map((k) => db?.details?.[k]).filter(Boolean),
   ]
     .filter(Boolean)
@@ -167,11 +170,7 @@ export default function ConnectionPanel() {
               )}
               {connections?.kafka && (
                 <span className="muted mono">
-                  {[
-                    connections.kafka.topic,
-                    connections.kafka.consumerGroup,
-                    connections.kafka.bootstrap,
-                  ]
+                  {[connections.kafka.topic, connections.kafka.consumerGroup]
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
@@ -188,6 +187,42 @@ export default function ConnectionPanel() {
               <span className="muted">Same origin, proxied — no cross-origin calls</span>
             </dd>
           </dl>
+
+          {info?.runtime && (
+            <details className="conn-details">
+              <summary>Runtime, in depth</summary>
+              <dl className="conn-list">
+                <dt>Java</dt>
+                <dd><span className="mono">{[info.runtime.java?.version, info.runtime.java?.vendor].filter(Boolean).join(' · ')}</span></dd>
+                <dt>Dependencies</dt>
+                <dd>
+                  <span className="mono">
+                    {Object.entries(info.runtime.dependencies ?? {})
+                      .map(([k, v]) => `${k} ${v}`)
+                      .join(' · ')}
+                  </span>
+                </dd>
+                <dt>OS</dt>
+                <dd><span className="mono">{[info.runtime.os?.name, info.runtime.os?.arch].filter(Boolean).join(' · ')}</span></dd>
+                <dt>This UI</dt>
+                <dd><span className="mono">React {reactVersion} · {import.meta.env.MODE} build</span></dd>
+              </dl>
+            </details>
+          )}
+
+          <details className="conn-details">
+            <summary>Where this can run</summary>
+            <dl className="conn-list">
+              <dt>Environments</dt>
+              <dd><span className="muted">laptop (profile: local) · k3d (kubernetes: crm) · course cluster (kubernetes: studentNN) · CI (profile: test)</span></dd>
+              <dt>Profiles</dt>
+              <dd><span className="muted">local — compose Postgres + Kafka · azure — hosted Flexible Server, TLS required · test — in-memory H2 + embedded Kafka</span></dd>
+              <dt>Databases</dt>
+              <dd><span className="muted">crm (compose or Azure) · bootcamp, one schema per student (course) · crm in-memory (tests)</span></dd>
+              <dt>Brokers</dt>
+              <dd><span className="muted">local, unprefixed topic · course, studentNN-prefixed topic and group · embedded (tests)</span></dd>
+            </dl>
+          </details>
 
           {probe.state === 'failed' && (
             <p className="error" role="alert">{probe.message}</p>

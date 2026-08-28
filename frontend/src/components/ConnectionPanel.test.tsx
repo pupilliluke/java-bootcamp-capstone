@@ -31,12 +31,18 @@ const HEALTHY = {
 const INFO = {
   connections: {
     profile: 'local',
-    database: 'postgresql://localhost:5432/crm',
+    environment: 'kubernetes: student02',
+    database: 'bootcamp',
+    schema: 'student02',
     kafka: {
-      bootstrap: 'localhost:9092',
       topic: 'crm.interaction.v1',
       consumerGroup: 'crm-interaction-service-v1',
     },
+  },
+  runtime: {
+    java: { version: '21.0.4', vendor: 'Eclipse Adoptium' },
+    dependencies: { springBoot: '3.3.5', hibernate: '6.5.3.Final' },
+    os: { name: 'Linux', arch: 'amd64' },
   },
   build: { artifact: 'crm-backend', version: '0.0.1-SNAPSHOT', time: '2026-08-27T12:00:00Z' },
   revision: 'ab0faa7deadbeef1234',
@@ -145,10 +151,26 @@ describe('ConnectionPanel', () => {
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
     expect(within(row('Backend')).getByText(/v0\.0\.1-SNAPSHOT/)).toBeInTheDocument()
     expect(within(row('Backend')).getByText(/ab0faa7deadb/)).toBeInTheDocument()
-    expect(within(row('Backend')).getByText(/profile: local/)).toBeInTheDocument()
-    expect(within(row('Database')).getByText(/postgresql:\/\/localhost:5432\/crm/)).toBeInTheDocument()
+    // The derived environment, not the profile: "kubernetes: student02" is
+    // read from the platform, and the panel never shows an address.
+    expect(within(row('Backend')).getByText(/kubernetes: student02/)).toBeInTheDocument()
+    expect(within(row('Database')).getByText(/db bootcamp/)).toBeInTheDocument()
+    expect(within(row('Database')).getByText(/schema student02/)).toBeInTheDocument()
+    expect(screen.queryByText(/localhost:9092|100\.22|5432/)).not.toBeInTheDocument()
+    // The in-depth collapsible carries the stack.
+    expect(screen.getByText(/21\.0\.4/)).toBeInTheDocument()
+    expect(screen.getByText(/springBoot 3\.3\.5/)).toBeInTheDocument()
     expect(within(row('Kafka')).getByText(/crm\.interaction\.v1/)).toBeInTheDocument()
     expect(within(row('Kafka')).getByText(/crm-interaction-service-v1/)).toBeInTheDocument()
+  })
+
+  it('shows the derived profile environment on a laptop', async () => {
+    vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
+    vi.mocked(infoApi.get).mockResolvedValue({ connections: { environment: 'profile: local' } })
+    render(<ConnectionPanel />)
+
+    await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
+    expect(within(row('Backend')).getByText(/profile: local/)).toBeInTheDocument()
   })
 
   // An older backend without the contributor answers info with nothing, or the
@@ -159,7 +181,9 @@ describe('ConnectionPanel', () => {
     render(<ConnectionPanel />)
 
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
-    expect(screen.queryByText(/profile:/)).not.toBeInTheDocument()
+    // The static options section legitimately mentions profiles; the
+    // assertion is that the Backend row carries no identity it cannot know.
+    expect(within(row('Backend')).queryByText(/profile:|kubernetes/)).not.toBeInTheDocument()
   })
 
   it('shows where the UI is served from', async () => {
