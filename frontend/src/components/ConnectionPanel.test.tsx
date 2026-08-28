@@ -134,23 +134,26 @@ describe('ConnectionPanel', () => {
     expect(within(row('Database')).getByText(/not reported/i)).toBeInTheDocument()
   })
 
-  // Verified against the running backend: no Kafka indicator is registered.
-  it('says the broker is not reported rather than inventing a status', async () => {
+  // No Kafka health indicator is registered, so the row shows no status at all
+  // rather than inventing one or explaining the absence.
+  it('shows no Kafka status when the broker has no health indicator', async () => {
     vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
     render(<ConnectionPanel />)
 
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
-    expect(within(row('Kafka')).getByText(/no health indicator/i)).toBeInTheDocument()
+    expect(within(row('Kafka')).queryByText(/no health indicator/i)).not.toBeInTheDocument()
+    expect(within(row('Kafka')).queryByText(/^(UP|DOWN)$/)).not.toBeInTheDocument()
   })
 
-  it('names the version, revision, profile and database target from info', async () => {
+  it('names the version, environment and database target from info', async () => {
     vi.mocked(healthApi.get).mockResolvedValue(HEALTHY)
     vi.mocked(infoApi.get).mockResolvedValue(INFO)
     render(<ConnectionPanel />)
 
     await waitFor(() => expect(within(row('Backend')).getByText('UP')).toBeInTheDocument())
     expect(within(row('Backend')).getByText(/v0\.0\.1-SNAPSHOT/)).toBeInTheDocument()
-    expect(within(row('Backend')).getByText(/ab0faa7deadb/)).toBeInTheDocument()
+    // The commit revision is deliberately not surfaced in the panel.
+    expect(within(row('Backend')).queryByText(/ab0faa7deadb/)).not.toBeInTheDocument()
     // The derived environment, not the profile: "kubernetes: student02" is
     // read from the platform, and the panel never shows an address.
     expect(within(row('Backend')).getByText(/kubernetes: student02/)).toBeInTheDocument()

@@ -94,7 +94,6 @@ export default function ConnectionPanel() {
 
   const backendIdentity = [
     build?.version && `v${build.version}`,
-    info?.revision && info.revision.slice(0, 12),
     // Derived server-side: "kubernetes: student02" from the platform's own
     // signals, or "profile: local" on a laptop. Never a declared label.
     connections?.environment,
@@ -160,13 +159,11 @@ export default function ConnectionPanel() {
 
             <dt>Kafka</dt>
             <dd>
-              {kafkaHealth ? (
+              {kafkaHealth && (
                 <>
                   <StatusDot status={kafkaHealth.status} />
                   <span>{kafkaHealth.status}</span>
                 </>
-              ) : (
-                <span className="muted">No health indicator is registered for the broker</span>
               )}
               {connections?.kafka && (
                 <span className="muted mono">
